@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sthg-agent-core"
+version = "0.1.0"
+description = "STHG Agent Core -- 独立的智能研究分析 Agent 核心包"
+requires-python = ">=3.11"
+dependencies = [
+    "loguru>=0.7",
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
+    "aiosqlite>=0.19",
+]
+
+[project.optional-dependencies]
+sdk = [
+    "anthropic>=0.40",
+    "claude-agent-sdk>=0.1",
+]
+full = [
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "redis>=5.0",
+    "sqlalchemy>=2.0",
+]
+
+[project.scripts]
+sthg-agent = "agent_core.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["agent_core*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{TITLE}}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #1a1a2e; color: #e0e0e0; padding: 20px;
+  }
+  h1 { font-size: 18px; margin-bottom: 16px; color: #fff; }
+  .table-wrapper { overflow-x: auto; border-radius: 10px; border: 1px solid rgba(100,100,255,0.2); }
+  table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+  }
+  th {
+    background: rgba(91,155,213,0.2); color: #b0c4de;
+    padding: 12px 16px; text-align: left; font-weight: 600;
+    border-bottom: 2px solid rgba(100,100,255,0.3);
+    white-space: nowrap;
+  }
+  td {
+    padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  tr:hover { background: rgba(255,255,255,0.04); }
+  .num-positive { color: #ef5350; }
+  .num-negative { color: #26a69a; }
+  .summary {
+    margin-top: 16px; padding: 12px 16px; background: rgba(255,255,255,0.04);
+    border-radius: 8px; font-size: 13px; color: #999;
+  }
+</style>
+</head>
+<body>
+<h1>{{TITLE}}</h1>
+<div class="table-wrapper">
+  <table id="dataTable"></table>
+</div>
+<div class="summary" id="summary"></div>
+<script>
+const DATA = {{DATA_JSON}};
+
+// 解析数据
+let rows = [];
+let columns = [];
+
+if (Array.isArray(DATA)) {
+  rows = DATA;
+} else if (DATA.data && Array.isArray(DATA.data)) {
+  rows = DATA.data;
+} else if (DATA.rows && Array.isArray(DATA.rows)) {
+  rows = DATA.rows;
+} else if (DATA.columns && DATA.values) {
+  // columns + values 格式
+  columns = DATA.columns;
+  rows = DATA.values.map(row => {
+    const obj = {};
+    columns.forEach((col, i) => { obj[col] = row[i]; });
+    return obj;
+  });
+}
+
+// 提取列名
+if (columns.length === 0 && rows.length > 0) {
+  columns = Object.keys(rows[0]);
+}
+
+// 渲染表格
+let html = '<thead><tr>';
+columns.forEach(col => { html += `<th>${col}</th>`; });
+html += '</tr></thead><tbody>';
+
+rows.forEach(row => {
+  html += '<tr>';
+  columns.forEach(col => {
+    const val = row[col];
+    let cls = '';
+    if (typeof val === 'number') {
+      if (val > 0 && (col.includes('涨') || col.includes('change') || col.includes('pct'))) cls = 'num-positive';
+      if (val < 0) cls = 'num-negative';
+    }
+    const displayVal = typeof val === 'number' ? val.toLocaleString() : (val || '-');
+    html += `<td class="${cls}">${displayVal}</td>`;
+  });
+  html += '</tr>';
+});
+
+html += '</tbody>';
+document.getElementById('dataTable').innerHTML = html;
+document.getElementById('summary').textContent = `共 ${rows.length} 条数据`;
+</script>
+</body>
+</html>

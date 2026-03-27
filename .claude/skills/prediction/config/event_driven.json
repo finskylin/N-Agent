@@ -1,0 +1,45 @@
+{
+  "event_impacts": {
+    "merger": 0.05,
+    "private_placement": 0.03,
+    "buyback": 0.02,
+    "equity_incentive": 0.02,
+    "earnings": 0.04,
+    "dividend": 0.01,
+    "new_business": 0.02,
+    "share_unlock": -0.03,
+    "reduction": -0.03,
+    "litigation": -0.03,
+    "downgrade": -0.02,
+    "loss": -0.04,
+    "high_pledge": -0.02
+  },
+
+  "max_positive_adjustment": 0.15,
+  "max_negative_adjustment": -0.15,
+
+  "alert_days_before": 5,
+  "review_days_after": 10,
+
+  "time_sensitivity": {
+    "7days": 2,
+    "30days": 1,
+    "90days": -1
+  },
+
+  "base_scores": {
+    "merger": 9,
+    "private_placement": 7,
+    "buyback": 6,
+    "equity_incentive": 6,
+    "earnings": 8,
+    "dividend": 5,
+    "new_business": 6,
+    "share_unlock": 7,
+    "reduction": 7,
+    "litigation": 6,
+    "downgrade": 5,
+    "loss": 8,
+    "high_pledge": 5
+  }
+}

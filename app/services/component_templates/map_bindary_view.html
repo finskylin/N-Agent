@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{TITLE}}</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; }
+  #map { width: 100%; height: 100vh; }
+  .title-bar {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 1000;
+    background: linear-gradient(180deg, rgba(26,26,46,0.95) 0%, rgba(26,26,46,0.7) 100%);
+    padding: 12px 20px; color: #e0e0e0;
+    font-size: 16px; font-weight: 600;
+    border-bottom: 1px solid rgba(100,100,255,0.3);
+  }
+  .marker-popup { font-size: 13px; line-height: 1.6; min-width: 180px; }
+  .marker-popup .popup-title { font-weight: 700; font-size: 14px; color: #1a1a2e; margin-bottom: 4px; }
+  .marker-popup .popup-type { color: #666; font-size: 12px; }
+  .marker-popup .popup-desc { margin-top: 6px; color: #333; }
+  .legend {
+    position: absolute; bottom: 20px; right: 20px; z-index: 1000;
+    background: rgba(26,26,46,0.9); color: #ccc; padding: 12px 16px;
+    border-radius: 8px; font-size: 12px; border: 1px solid rgba(100,100,255,0.3);
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+</style>
+</head>
+<body>
+<div class="title-bar">{{TITLE}}</div>
+<div id="map"></div>
+<script>
+const DATA = {{DATA_JSON}};
+
+// 初始化地图
+const center = DATA.center || [35, 110];
+const zoom = DATA.zoom || 5;
+const map = L.map('map', { zoomControl: true }).setView([center[1], center[0]], zoom);
+
+// ============================================================
+// 瓦片源配置
+// ============================================================
+function getTileUrl() {
+  const style = DATA.style || 'osm_standard';
+
+  const tileSources = {
+    // OSM 标准地图（默认）
+    'osm_standard': '/osm-tiles/{z}/{x}/{y}.png',
+    // OSM 热力图（灾害区域）
+    'osm_hot': '/osm-tiles-hot/{z}/{x}/{y}.png',
+    // OSM 等高线（地形分析）
+    'osm_topo': '/osm-tiles-topo/{z}/{x}/{y}.png',
+    // OSM 自行道图（交通分析）
+    'osm_cycle': '/osm-tiles-cycle/{z}/{x}/{y}.png',
+    // 高德卫星图（备用）
+    'amap_satellite': 'https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}',
+    // 高德标准图（备用）
+    'amap_light': 'https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}'
+  };
+
+  return tileSources[style] || tileSources['osm_standard'];
+}
+
+function getTileAttribution() {
+  const style = DATA.style || 'osm_standard';
+
+  const attributions = {
+    'osm_standard': '© OpenStreetMap contributors',
+    'osm_hot': '© OpenStreetMap contributors, Tiles style by Humanitarian OpenStreetMap Team',
+    'osm_topo': '© OpenStreetMap, SRTM | map style: © OpenTopoMap (CC-BY-SA)',
+    'osm_cycle': '© OpenStreetMap contributors, Tiles style by Courtesy of OpenCycleMap',
+    'amap_satellite': '© 高德地图',
+    'amap_light': '© 高德地图'
+  };
+
+  return attributions[style] || attributions['osm_standard'];
+}
+
+// 添加 OSM 标准地图层
+const currentTileUrl = getTileUrl();
+const currentAttribution = DATA.attribution || getTileAttribution();
+
+L.tileLayer(currentTileUrl, {
+  attribution: currentAttribution,
+  maxZoom: DATA.maxZoom || 19,
+  minZoom: 2
+}).addTo(map);
+
+// ============================================================
+// 降级处理：瓦片加载失败时的重试逻辑
+// ============================================================
+let retryCount = 0;
+const MAX_RETRIES = 3;
+
+map.on('tileerror', (error) => {
+  console.warn('[Map] Tile load error:', error);
+  retryCount++;
+
+  if (retryCount >= MAX_RETRIES && DATA.style.startsWith('osm_')) {
+    console.warn('[Map] OSM tiles failed, fallback to Amap satellite');
+    // 降级到高德卫星图
+    DATA.style = 'amap_satellite';
+    DATA.attribution = '© 高德地图';
+
+    // 移除旧图层并添加新图层
+    map.eachLayer((layer) => {
+      if (layer instanceof L.TileLayer) {
+        map.removeLayer(layer);
+      }
+    });
+
+    L.tileLayer('https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}', {
+      attribution: '© 高德地图',
+      subdomains: '1234',
+      maxZoom: 19
+    }).addTo(map);
+  }
+});
+
+map.on('tileload', () => {
+  // 瓦片加载成功，重置重试计数
+  if (retryCount < MAX_RETRIES) {
+    retryCount = 0;
+  }
+});
+
+// 图标 emoji 映射
+const ICON_MAP = {
+  carrier: '🚢', destroyer: '🛳️', frigate: '⛵', submarine: '🤿',
+  fighter: '✈️', bomber: '💣', helicopter: '🚁', drone: '🛸',
+  base_naval: '⚓', base_air: '🛫', base_army: '🏰',
+  radar: '📡', missile: '🚀', port: '🏗️', airport: '🛬',
+  conflict: '💥', warning: '⚠️', city: '🏙️', custom: '📍',
+  default: '📌'
+};
+
+function getIcon(type, color) {
+  const emoji = ICON_MAP[type] || ICON_MAP['default'];
+  return L.divIcon({
+    html: `<div style="font-size:24px;text-shadow:0 0 6px ${color || '#fff'}">${emoji}</div>`,
+    iconSize: [30, 30], iconAnchor: [15, 15], className: ''
+  });
+}
+
+// 渲染标记点
+if (DATA.markers) {
+  DATA.markers.forEach(m => {
+    const coords = m.coordinates || [];
+    if (coords.length < 2) return;
+    const marker = L.marker([coords[1], coords[0]], {
+      icon: getIcon(m.type, m.color)
+    }).addTo(map);
+    marker.bindPopup(`
+      <div class="marker-popup">
+        <div class="popup-title">${m.name || ''}</div>
+        <div class="popup-type">${m.type || ''}</div>
+        <div class="popup-desc">${m.description || ''}</div>
+      </div>
+    `);
+  });
+}
+
+// 渲染轨迹线
+if (DATA.tracks) {
+  DATA.tracks.forEach(t => {
+    const coords = (t.coordinates || []).map(c => [c[1], c[0]]);
+    if (coords.length < 2) return;
+    L.polyline(coords, {
+      color: t.color || '#00ff88',
+      weight: t.width || 3,
+      dashArray: t.style === 'dashed' ? '10,6' : t.style === 'dotted' ? '2,6' : null,
+      opacity: 0.8
+    }).addTo(map);
+  });
+}
+
+// 渲染区域
+if (DATA.areas) {
+  DATA.areas.forEach(a => {
+    const coords = (a.coordinates || []).map(c => [c[1], c[0]]);
+    if (coords.length < 3) return;
+    L.polygon(coords, {
+      color: a.stroke_color || '#ff4444',
+      fillColor: a.fill_color || 'rgba(255,68,68,0.2)',
+      weight: a.stroke_width || 2, fillOpacity: 0.3
+    }).addTo(map).bindPopup(a.name || '');
+  });
+}
+
+// 渲染范围圈
+if (DATA.circles) {
+  DATA.circles.forEach(c => {
+    const center = c.center || [];
+    if (center.length < 2) return;
+    L.circle([center[1], center[0]], {
+      radius: (c.radius || 100) * 1000, // km -> m
+      color: c.stroke_color || '#ffaa00',
+      fillColor: c.fill_color || 'rgba(255,170,0,0.15)',
+      weight: c.stroke_width || 2, fillOpacity: 0.2
+    }).addTo(map).bindPopup(c.name || '');
+  });
+}
+
+// 自动适配边界
+if (DATA.markers && DATA.markers.length > 0) {
+  const bounds = DATA.markers
+    .filter(m => m.coordinates && m.coordinates.length >= 2)
+    .map(m => [m.coordinates[1], m.coordinates[0]]);
+  if (bounds.length > 1) {
+    map.fitBounds(bounds, { padding: [50, 50] });
+  }
+}
+</script>
+</body>
+</html>

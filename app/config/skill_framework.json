@@ -1,0 +1,54 @@
+{
+  "discovery": {
+    "enabled": true,
+    "layers": [
+      {
+        "name": "extra",
+        "priority": 10,
+        "paths": []
+      },
+      {
+        "name": "bundled",
+        "priority": 20,
+        "path": null
+      },
+      {
+        "name": "user",
+        "priority": 30,
+        "source": "dynamic"
+      },
+      {
+        "name": "workspace",
+        "priority": 40,
+        "source": "skills_dir"
+      }
+    ],
+    "override_strategy": "higher_priority_wins"
+  },
+  "prompt_budget": {
+    "enabled": true,
+    "max_skills": 80,
+    "max_total_chars": 40000,
+    "max_single_skill_chars": 2000,
+    "phase0_protected_ratio": 0.3,
+    "category_min_coverage": 1
+  },
+  "qualifier": {
+    "enabled": true,
+    "skip_qualification": false,
+    "cache_ttl_seconds": 300
+  },
+  "registry": {
+    "enabled": true,
+    "allow_external_api": true,
+    "allow_descriptive_skill": true,
+    "max_external_skills": 50
+  },
+  "composable": {
+    "enabled": true,
+    "max_parallel_steps": 5,
+    "default_error_strategy": "stop",
+    "max_retries": 2,
+    "step_timeout_seconds": 60
+  }
+}

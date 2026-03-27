@@ -1,0 +1,34 @@
+{
+  "dataset": {
+    "base_path": "app/data/benchmark/gaia",
+    "split": "validation",
+    "metadata_file": "metadata.jsonl"
+  },
+  "execution": {
+    "agent_base_url": "http://localhost:8000",
+    "chat_endpoint": "/api/v1/chat/v4/send",
+    "max_concurrency": 3,
+    "timeout_per_question_seconds": 300,
+    "timeout_level_overrides": {
+      "1": 120,
+      "2": 240,
+      "3": 600
+    },
+    "retry_count": 1,
+    "retry_delay_seconds": 5
+  },
+  "prompt": {
+    "system_instruction_template": "gaia_system_instruction",
+    "message_template": "{system_instruction}\n\nQuestion: {question}"
+  },
+  "scoring": {
+    "final_answer_marker": "FINAL ANSWER:",
+    "case_insensitive_marker_search": true
+  },
+  "output": {
+    "results_dir": "app/data/benchmark/results",
+    "report_filename_pattern": "gaia_report_{run_id}.md",
+    "results_filename_pattern": "gaia_results_{run_id}.json"
+  },
+  "benchmark_user_id": 99999
+}

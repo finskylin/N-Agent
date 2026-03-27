@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{TITLE}}</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; }
+  #chart { width: 100%; height: 100vh; }
+</style>
+</head>
+<body>
+<div id="chart"></div>
+<script>
+const DATA = {{DATA_JSON}};
+const chart = echarts.init(document.getElementById('chart'), 'dark');
+
+// 通用技术指标图表
+const dates = DATA.dates || DATA.data?.map(d => d.date || d.trade_date) || [];
+const series = [];
+const legendData = [];
+
+// MACD
+if (DATA.macd || DATA.dif || DATA.dea) {
+  const dif = DATA.dif || DATA.macd?.dif || [];
+  const dea = DATA.dea || DATA.macd?.dea || [];
+  const macdHist = DATA.macd_hist || DATA.macd?.hist || [];
+
+  if (dif.length) { legendData.push('DIF'); series.push({ name: 'DIF', type: 'line', data: dif, lineStyle: { width: 1.5 }, itemStyle: { color: '#5b9bd5' } }); }
+  if (dea.length) { legendData.push('DEA'); series.push({ name: 'DEA', type: 'line', data: dea, lineStyle: { width: 1.5 }, itemStyle: { color: '#ffa726' } }); }
+  if (macdHist.length) {
+    legendData.push('MACD柱');
+    series.push({
+      name: 'MACD柱', type: 'bar', data: macdHist,
+      itemStyle: { color: function(params) { return params.value >= 0 ? '#ef5350' : '#26a69a'; } }
+    });
+  }
+}
+
+// KDJ
+if (DATA.k || DATA.d || DATA.j || DATA.kdj) {
+  const k = DATA.k || DATA.kdj?.k || [];
+  const d = DATA.d || DATA.kdj?.d || [];
+  const j = DATA.j || DATA.kdj?.j || [];
+
+  if (k.length) { legendData.push('K'); series.push({ name: 'K', type: 'line', data: k, lineStyle: { width: 1.5 }, itemStyle: { color: '#5b9bd5' } }); }
+  if (d.length) { legendData.push('D'); series.push({ name: 'D', type: 'line', data: d, lineStyle: { width: 1.5 }, itemStyle: { color: '#ffa726' } }); }
+  if (j.length) { legendData.push('J'); series.push({ name: 'J', type: 'line', data: j, lineStyle: { width: 1.5 }, itemStyle: { color: '#ab47bc' } }); }
+}
+
+// RSI
+if (DATA.rsi || DATA.rsi6 || DATA.rsi12 || DATA.rsi24) {
+  const rsi6 = DATA.rsi6 || DATA.rsi?.rsi6 || [];
+  const rsi12 = DATA.rsi12 || DATA.rsi?.rsi12 || [];
+  const rsi24 = DATA.rsi24 || DATA.rsi?.rsi24 || [];
+
+  if (rsi6.length) { legendData.push('RSI6'); series.push({ name: 'RSI6', type: 'line', data: rsi6, lineStyle: { width: 1.5 }, itemStyle: { color: '#5b9bd5' } }); }
+  if (rsi12.length) { legendData.push('RSI12'); series.push({ name: 'RSI12', type: 'line', data: rsi12, lineStyle: { width: 1.5 }, itemStyle: { color: '#ffa726' } }); }
+  if (rsi24.length) { legendData.push('RSI24'); series.push({ name: 'RSI24', type: 'line', data: rsi24, lineStyle: { width: 1.5 }, itemStyle: { color: '#26a69a' } }); }
+}
+
+// MA 均线
+if (DATA.ma5 || DATA.ma10 || DATA.ma20 || DATA.ma60) {
+  const maColors = { ma5: '#5b9bd5', ma10: '#ffa726', ma20: '#ab47bc', ma60: '#26a69a' };
+  for (const [key, color] of Object.entries(maColors)) {
+    const vals = DATA[key] || [];
+    if (vals.length) { legendData.push(key.toUpperCase()); series.push({ name: key.toUpperCase(), type: 'line', data: vals, lineStyle: { width: 1.5 }, itemStyle: { color } }); }
+  }
+}
+
+// 通用数值序列
+if (series.length === 0 && DATA.values) {
+  series.push({ name: DATA.name || '数值', type: 'line', data: DATA.values, lineStyle: { width: 2 }, itemStyle: { color: '#5b9bd5' } });
+  legendData.push(DATA.name || '数值');
+}
+
+const option = {
+  backgroundColor: '#1a1a2e',
+  title: { text: '{{TITLE}}', left: 'center', top: 10, textStyle: { color: '#e0e0e0', fontSize: 16 } },
+  tooltip: { trigger: 'axis' },
+  legend: { data: legendData, top: 40, textStyle: { color: '#999' } },
+  grid: { left: '8%', right: '4%', top: '16%', bottom: '12%' },
+  xAxis: { type: 'category', data: dates, axisLabel: { color: '#999' } },
+  yAxis: { type: 'value', scale: true, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } } },
+  dataZoom: [
+    { type: 'inside', start: 60, end: 100 },
+    { type: 'slider', start: 60, end: 100 }
+  ],
+  series: series
+};
+
+chart.setOption(option);
+window.addEventListener('resize', () => chart.resize());
+</script>
+</body>
+</html>

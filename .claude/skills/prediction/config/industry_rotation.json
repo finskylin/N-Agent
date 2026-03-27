@@ -1,0 +1,20 @@
+{
+  "momentum_weights": [0.4, 0.3, 0.3],
+  "periods": [5, 20],
+  "strong_days": 3,
+  "top_rank": 5,
+  "rotation_range": 10,
+  "decline_days": 3,
+  "confidence_boost": 0.1,
+  "confidence_penalty": 0.1,
+  "scoring": {
+    "momentum_period_weights": {
+      "5d": 0.4,
+      "20d": 0.3,
+      "60d": 0.3
+    },
+    "volume_weight": 0.2,
+    "breadth_weight": 0.3,
+    "momentum_weight": 0.5
+  }
+}

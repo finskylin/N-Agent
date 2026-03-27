@@ -1,0 +1,20 @@
+{
+    "reflection": {
+        "enabled": true,
+        "max_reflection_rounds": 2,
+        "max_total_tool_calls": 30,
+        "max_total_elapsed_seconds": 600,
+        "llm_eval": {
+            "enabled": true,
+            "model_override": null,
+            "max_tokens": 1024,
+            "timeout_seconds": 15
+        },
+        "tracker": {
+            "summary_max_chars": 2000
+        },
+        "stop_hook": {
+            "timeout_seconds": 30
+        }
+    }
+}

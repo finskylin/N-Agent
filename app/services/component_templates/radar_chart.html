@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{TITLE}}</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; }
+  #chart { width: 100%; height: 100vh; }
+</style>
+</head>
+<body>
+<div id="chart"></div>
+<script>
+const DATA = {{DATA_JSON}};
+const chart = echarts.init(document.getElementById('chart'), 'dark');
+
+// 解析雷达维度
+const dimensions = DATA.dimensions || DATA.indicators || [];
+const indicator = dimensions.map(d => ({
+  name: typeof d === 'string' ? d : (d.name || d.label || ''),
+  max: typeof d === 'object' ? (d.max || 100) : 100
+}));
+
+// 解析数值
+const values = DATA.values || DATA.scores || DATA.data || [];
+
+const option = {
+  backgroundColor: '#1a1a2e',
+  title: { text: '{{TITLE}}', left: 'center', top: 10, textStyle: { color: '#e0e0e0', fontSize: 16 } },
+  tooltip: { trigger: 'item' },
+  radar: {
+    indicator: indicator,
+    shape: 'polygon',
+    splitNumber: 5,
+    axisName: { color: '#b0b0b0', fontSize: 12 },
+    splitLine: { lineStyle: { color: 'rgba(100,100,255,0.2)' } },
+    splitArea: { areaStyle: { color: ['rgba(100,100,255,0.05)', 'rgba(100,100,255,0.1)'] } },
+    axisLine: { lineStyle: { color: 'rgba(100,100,255,0.3)' } }
+  },
+  series: [{
+    type: 'radar',
+    data: [{
+      value: values,
+      name: DATA.name || '评分',
+      areaStyle: { color: 'rgba(91,155,213,0.3)' },
+      lineStyle: { color: '#5b9bd5', width: 2 },
+      itemStyle: { color: '#5b9bd5' }
+    }]
+  }]
+};
+
+chart.setOption(option);
+window.addEventListener('resize', () => chart.resize());
+</script>
+</body>
+</html>

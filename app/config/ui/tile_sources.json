@@ -1,0 +1,79 @@
+{
+  "osm_standard": {
+    "url": "/osm-tiles/{z}/{x}/{y}.png",
+    "external_url": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+    "attribution": "© OpenStreetMap contributors",
+    "maxZoom": 19,
+    "minZoom": 2
+  },
+  "osm_hot": {
+    "url": "/osm-tiles-hot/{z}/{x}/{y}.png",
+    "external_url": "https://a.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png",
+    "attribution": "© OpenStreetMap contributors, Tiles style by Humanitarian OpenStreetMap Team",
+    "maxZoom": 20,
+    "minZoom": 1
+  },
+  "osm_topo": {
+    "url": "/osm-tiles-topo/{z}/{x}/{y}.png",
+    "external_url": "https://a.tile.opentopomap.org/{z}/{x}/{y}.png",
+    "attribution": "© OpenStreetMap, SRTM | map style: © OpenTopoMap (CC-BY-SA)",
+    "maxZoom": 17,
+    "minZoom": 2
+  },
+  "osm_cycle": {
+    "url": "/osm-tiles-cycle/{z}/{x}/{y}.png",
+    "external_url": "https://a.tile.cyclemap.osm.cz/cycle/{z}/{x}/{y}.png",
+    "attribution": "© OpenStreetMap contributors, Tiles style by Courtesy of OpenCycleMap",
+    "maxZoom": 19,
+    "minZoom": 2
+  },
+  "street": {
+    "url": "https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}",
+    "attribution": "© 高德地图",
+    "subdomains": "1234"
+  },
+  "light": {
+    "url": "https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}",
+    "attribution": "© 高德地图",
+    "subdomains": "1234"
+  },
+  "satellite": {
+    "url": "https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}",
+    "attribution": "© 高德地图",
+    "subdomains": "1234"
+  },
+  "satellite_label": {
+    "url": "https://webst0{s}.is.autonavi.com/appmaptile?style=8&x={x}&y={y}&z={z}",
+    "attribution": "© 高德地图",
+    "subdomains": "1234"
+  },
+  "terrain": {
+    "url": "https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}",
+    "attribution": "© 高德地图",
+    "subdomains": "1234"
+  },
+  "weather_wind": {
+    "url": "https://tile.openweathermap.org/map/wind_new/{z}/{x}/{y}.png?appid={apikey}",
+    "attribution": "© OpenWeatherMap",
+    "overlay": true
+  },
+  "weather_temp": {
+    "url": "https://tile.openweathermap.org/map/temp_new/{z}/{x}/{y}.png?appid={apikey}",
+    "attribution": "© OpenWeatherMap",
+    "overlay": true
+  },
+  "weather_precipitation": {
+    "url": "https://tile.openweathermap.org/map/precipitation_new/{z}/{x}/{y}.png?appid={apikey}",
+    "attribution": "© OpenWeatherMap",
+    "overlay": true
+  },
+  "weather_clouds": {
+    "url": "https://tile.openweathermap.org/map/clouds_new/{z}/{x}/{y}.png?appid={apikey}",
+    "attribution": "© OpenWeatherMap",
+    "overlay": true
+  },
+  "gebco": {
+    "url": "https://tiles.arcgis.com/tiles/C8EMgrsFcRFL6LrL/arcgis/rest/services/GEBCO_basemap_NCEI/MapServer/tile/{z}/{y}/{x}",
+    "attribution": "© GEBCO"
+  }
+}

@@ -1,0 +1,115 @@
+# Python Agent Service Dependencies
+
+# Web Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart>=0.0.9
+
+# Data Sources
+tushare==1.2.89
+akshare
+adata
+
+# Data Processing
+pandas==2.3.3
+numpy==2.2.6
+
+# ML Models
+xgboost==2.0.3
+lightgbm==4.3.0
+scikit-learn==1.4.0
+tensorflow>=2.13.0  # LSTM prediction skill
+joblib>=1.3.0
+
+# Additional Data Sources
+yfinance>=0.2.36
+
+# HTTP Client
+httpx==0.27.2
+aiohttp
+
+# Configuration
+python-dotenv==1.0.0
+pydantic>=2.8.0,<3.0.0
+pydantic-settings>=2.6.1
+
+# Database
+sqlalchemy==2.0.25
+aiosqlite==0.19.0
+
+# Logging
+loguru==0.7.2
+
+# System monitoring
+psutil==5.9.8
+
+# Database Drivers
+cryptography
+
+# Auth
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt==3.2.0
+
+# Testing
+pytest==7.4.4
+pytest-asyncio==0.23.3
+
+# Optional: Claude API
+# anthropic==0.8.1
+openai==1.58.1
+anthropic==0.77.1
+mcp>=1.8.0,<1.10.0
+ddgs>=9.9.3
+e2b-code-interpreter==1.0.3
+gradio_client==1.5.0
+
+# Browser automation
+playwright>=1.40.0
+patchright>=1.40.0  # Protocol-level stealth for Google/DuckDuckGo anti-bot bypass
+browserforge>=1.2.0  # Bayesian fingerprint generation for anti-detection
+selenium>=4.15.0  # Selenium for fallback Google search
+undetected-chromedriver>=3.5.0  # Bypass Google bot detection
+webdriver-manager>=4.0.0  # Auto manage chromedriver versions
+
+# Office Document Generation
+Pillow>=10.0.0
+python-pptx>=0.6.21
+openpyxl>=3.1.2
+python-docx>=1.1.0
+pypdf>=3.17.0
+pdfplumber>=0.10.3
+reportlab>=4.0.9
+pdf2image>=1.17.0
+defusedxml>=0.7.1
+pytesseract>=0.3.10
+markitdown[pptx]>=0.0.1
+matplotlib>=3.5.0  # 图表生成
+pymupdf>=1.23.0  # PDF 解析 (intelligent search)
+
+# Additional dependencies for Skills
+urllib3>=1.26.0  # web_search 需要
+beautifulsoup4>=4.12.0  # web_search 可能需要
+lxml>=4.9.0  # HTML 解析
+
+# SSL Certificates (macOS Python SSL fix)
+certifi>=2023.0.0
+
+# Datasets
+datasets>=2.16.0  # HuggingFace datasets (dataset_loader skill)
+
+# Toolbox (Remote SSH Execution)
+asyncssh>=2.14.0  # SSH 连接
+
+# DingTalk Stream Mode (钉钉机器人)
+dingtalk-stream>=0.18.0
+
+# Feishu Long-Connection Mode (飞书机器人)
+lark-oapi>=1.3.0
+
+# Dynamic Skill Creator
+PyYAML>=6.0.0  # YAML 解析 (动态技能 workflow 定义)
+
+# Hot Reload (技能热加载，无需重启服务)
+watchdog>=3.0.0
+docker>=7.0.0

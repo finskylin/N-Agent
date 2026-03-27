@@ -1,0 +1,49 @@
+*.log*
+*/sthg_agent_service/data/backup/*
+.venv*
+.env*
+__pycache__/
+*/sthg_frontend_project/dist/*
+*/sthg_frontend_project/node_modules/*
+*/tests/e2e*
+output_project/sthg_agent_service/tests/*
+*/sthg_backend_project/target/*
+*/sthg_agent_service/node_modules/*
+*/sthg_agent_service/.env
+.idea/master_growth.iml
+.idea/misc.xml
+
+# 训练数据（太大不提交，模型文件保留）
+**/training/training_data/*.npy
+**/training/training_data/*.json
+**/training/training_data/oof_cache_*
+**/agent_core/data/async_tasks.db
+
+# macOS 系统文件
+.DS_Store
+**/.DS_Store
+
+# IDE
+.idea/
+
+# 运行时数据（不提交）
+app/data/uploads/
+app/data/generated/
+app/data/sessions/
+app/data/object_storage/
+app/data/feedback/
+app/data/cron/
+app/data/*.db
+agent.db
+
+# 测试资产文件（图片/文档）
+app/test_files/*.png
+app/test_files/*.jpg
+app/test_files/*.jpeg
+app/test_files/*.pdf
+app/test_files/*.xlsx
+app/test_files/*.pptx
+app/test_files/*.docx
+
+# Skill 运行时生成文件
+.claude/skills/component_screenshot/scripts/app/

@@ -1,0 +1,6 @@
+{
+  "divergence_threshold": 0.67,
+  "confidence_penalty": 0.6,
+  "force_neutral": true,
+  "min_models_for_check": 3
+}

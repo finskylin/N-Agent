@@ -1,0 +1,27 @@
+{
+  "initial_capital": 100000,
+  "min_data_points": 20,
+  "ma_periods": [5, 20],
+  "trading_unit": 100,
+  "risk_free_rate": 0.03,
+  "annual_trading_days": 252,
+
+  "market_env_thresholds": {
+    "bull": 0.1,
+    "bear": -0.1
+  },
+
+  "rolling_window": {
+    "train_days": 120,
+    "test_days": 20,
+    "step_days": 5
+  },
+
+  "transaction_costs": {
+    "commission_rate": 0.0003,
+    "stamp_tax": 0.001,
+    "slippage": 0.001
+  },
+
+  "var_confidence": 0.95
+}

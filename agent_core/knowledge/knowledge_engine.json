@@ -1,0 +1,115 @@
+{
+  "_description": "AgentCore 知识引擎配置 V3.1 — 所有数值型参数均可调，禁止硬编码",
+
+  "enabled": true,
+
+  "episode_tracker": {
+    "max_episodes_per_user": 1000,
+    "result_summary_max_chars": 200,
+    "params_max_chars": 500,
+    "success_min_response_chars": 200
+  },
+
+  "feedback_learner": {
+    "enabled": true,
+    "reinforce_delta": 0.1,
+    "decay_delta": 0.15,
+    "preference_dimensions": ["style", "depth", "format", "topic_interest", "risk_tolerance"],
+    "llm_timeout_seconds": 30
+  },
+
+  "distiller": {
+    "enabled": true,
+    "min_skills_for_distill": 1,
+    "max_knowledge_per_episode": 5,
+    "max_knowledge_text_chars": 100,
+    "conflict_detection": true,
+    "llm_timeout_seconds": 80
+  },
+
+  "temporal": {
+    "enabled": true,
+    "snapshot_interval": "daily",
+    "max_version_chain_length": 100,
+    "max_cognition_changes": 1000,
+    "max_snapshots": 180,
+    "archive_after_days": 360,
+    "never_delete_knowledge": true,
+    "trend_window_days": 30,
+    "trend_threshold": 0.05
+  },
+
+  "heat_score": {
+    "_comment": "热力值计算的所有权重和参数，避免任何硬编码",
+    "decay_half_life_hours": 720,
+    "frequency_saturation": 10,
+    "feedback_reinforce_weight": 0.05,
+    "feedback_decay_weight": 0.08,
+    "feedback_boost_cap": 0.2,
+    "feedback_penalty_cap": 0.3,
+    "w_frequency": 0.25,
+    "w_utility": 0.35,
+    "w_recency": 0.25,
+    "base_offset": 0.15
+  },
+
+  "store": {
+    "max_knowledge_per_user": 1600,
+    "max_skill_profiles": 200,
+    "max_preferences_per_user": 40,
+    "min_heat_threshold": 0.05,
+    "cleanup_max_age_days": 180
+  },
+
+  "retriever": {
+    "default_top_k": 10,
+    "default_token_budget": 2000,
+    "score_weights": {
+      "tag_overlap": 0.4,
+      "utility": 0.3,
+      "heat": 0.3
+    },
+    "min_score_threshold": 0.1,
+    "inject_cognition_changes": true,
+    "max_cognition_changes_in_prompt": 3
+  },
+
+  "reflection": {
+    "enabled": true,
+    "batch_size": 10,
+    "interval_hours": 24,
+    "consecutive_failure_trigger": 3,
+    "min_failure_pattern_count": 2,
+    "include_cognition_changes": true,
+    "auto_snapshot": true,
+    "llm_timeout_seconds": 45
+  },
+
+  "evolution": {
+    "enabled": true,
+    "max_concurrent_tasks": 3,
+    "seek_timeout_seconds": 60,
+    "max_tasks_per_user": 40,
+    "task_ttl_days": 30,
+    "create_snapshot_on_complete": true
+  },
+
+  "crystallizer": {
+    "enabled": true,
+    "min_occurrences": 3,
+    "min_success_rate": 0.8,
+    "min_like_count": 2,
+    "max_crystals_per_user": 100,
+    "auto_deploy": false,
+    "pre_deploy_test": true,
+    "min_boost_pp": 0.0,
+    "llm_timeout_seconds": 45
+  },
+
+  "benchmark": {
+    "enabled": false,
+    "schedule": "weekly",
+    "dimensions": ["accumulation", "crystallization", "temporal", "evolution"],
+    "report_path": "reports/knowledge_engine_bench/"
+  }
+}

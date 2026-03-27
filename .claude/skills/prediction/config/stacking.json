@@ -1,0 +1,159 @@
+{
+  "rolling_window_days": 30,
+  "update_frequency": "daily",
+  "min_weight_pct": 0.05,
+  "softmax_temperature": 2.0,
+  "dynamic_regime_mix": [0.6, 0.4],
+
+  "default_weights": {
+    "xgboost": 0.30,
+    "lightgbm": 0.30,
+    "lstm": 0.20,
+    "sentiment": 0.20
+  },
+
+  "regime_weights": {
+    "bull": {"xgboost": 0.30, "lightgbm": 0.25, "lstm": 0.25, "sentiment": 0.20},
+    "bear": {"xgboost": 0.25, "lightgbm": 0.25, "lstm": 0.15, "sentiment": 0.35},
+    "range": {"xgboost": 0.35, "lightgbm": 0.35, "lstm": 0.15, "sentiment": 0.15}
+  },
+
+  "accuracy_tracker": {
+    "window": 20,
+    "min_records": 5
+  },
+
+  "confidence_thresholds": {
+    "high": 0.6,
+    "medium": 0.3
+  },
+
+  "probability_clip": {
+    "min": 0.34,
+    "max": 0.95
+  },
+
+  "regime_detection": {
+    "return_bull_threshold": 0.03,
+    "return_bear_threshold": -0.03,
+    "breadth_bull_threshold": 0.6,
+    "breadth_bear_threshold": 0.4,
+    "volatility_high_threshold": 0.25,
+    "volatility_low_threshold": 0.15,
+    "kline_bull_return": 0.05,
+    "kline_bear_return": -0.05
+  },
+
+  "regime_bias_factor": 0.1,
+
+  "model_hyperparams": {
+    "xgboost": {
+      "n_estimators": 3000,
+      "max_depth": 10,
+      "learning_rate": 0.005,
+      "min_child_weight": 3,
+      "gamma": 0.05,
+      "reg_alpha": 0.1,
+      "reg_lambda": 1.5,
+      "subsample": 0.75,
+      "colsample_bytree": 0.7,
+      "colsample_bylevel": 0.7,
+      "colsample_bynode": 0.8,
+      "scale_pos_weight": 1,
+      "random_state": 42,
+      "tree_method": "hist",
+      "cv_folds": 8,
+      "early_stopping_rounds": 100
+    },
+    "lightgbm": {
+      "n_estimators": 5000,
+      "num_leaves": 255,
+      "max_depth": -1,
+      "learning_rate": 0.003,
+      "min_data_in_leaf": 20,
+      "feature_fraction": 0.7,
+      "bagging_fraction": 0.75,
+      "bagging_freq": 5,
+      "lambda_l1": 0.1,
+      "lambda_l2": 0.5,
+      "min_gain_to_split": 0.01,
+      "extra_trees": true,
+      "random_state": 42,
+      "cv_folds": 8,
+      "early_stopping_rounds": 200
+    },
+    "lstm": {
+      "seq_len": 40,
+      "n_features": 25,
+      "lstm_units": [256, 128, 64],
+      "attention_layers": 2,
+      "attention_heads": 8,
+      "attention_key_dim": [64, 32],
+      "dropout": 0.2,
+      "recurrent_dropout": 0.1,
+      "fc_dropout": [0.3, 0.2, 0.1],
+      "fc_units": [128, 64, 32],
+      "learning_rate": 0.001,
+      "epochs": 80,
+      "batch_size": 128,
+      "patience": 10,
+      "reduce_lr_patience": 5,
+      "reduce_lr_factor": 0.5,
+      "min_lr": 1e-6,
+      "class_weight": "balanced"
+    },
+    "meta_learner_xgb": {
+      "n_estimators": 200,
+      "max_depth": 5,
+      "learning_rate": 0.02,
+      "subsample": 0.8,
+      "colsample_bytree": 0.8,
+      "reg_alpha": 0.05,
+      "reg_lambda": 1.0,
+      "random_state": 42,
+      "cv_folds": 8,
+      "aux_features_enabled": true
+    }
+  },
+
+  "sample_weight_decay": {
+    "xgboost": 0.001,
+    "lightgbm": 0.001,
+    "lstm": 0.0005,
+    "pipeline": 0.9997
+  },
+
+  "return_magnitude_factor": {
+    "xgboost": 0.15,
+    "lightgbm": 0.15,
+    "lstm": 0.08,
+    "ensemble": 0.10
+  },
+
+  "pattern_detection": {
+    "consecutive_strong_up": 4,
+    "consecutive_moderate_up": 3,
+    "consecutive_strong_down": 4,
+    "consecutive_moderate_down": 3,
+    "strong_change_threshold": 0.01,
+    "trend_strength_threshold": 1.5,
+    "narrow_range_std": 0.01,
+    "volatile_std": 0.03
+  },
+
+  "label_generation": {
+    "base_threshold": 0.03,
+    "min_threshold": 0.02,
+    "max_threshold": 0.08,
+    "weak_signal_ratio": 0.5,
+    "drop_weak_neutral": true
+  },
+
+  "meta_learner": {
+    "C": 1.0,
+    "max_iter": 1000,
+    "solver": "lbfgs",
+    "n_splits": 8,
+    "min_samples": 100
+  }
+}

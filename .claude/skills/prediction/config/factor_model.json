@@ -1,0 +1,74 @@
+{
+  "dimension_weights": {
+    "fundamental": 0.25,
+    "technical": 0.15,
+    "valuation": 0.15,
+    "capital": 0.15,
+    "sentiment": 0.10,
+    "events": 0.10,
+    "innovation": 0.10
+  },
+
+  "rating_thresholds": {
+    "A+": 90,
+    "A": 80,
+    "B+": 70,
+    "B": 60,
+    "C": 50,
+    "D": 0
+  },
+
+  "rating_labels": {
+    "A+": "\u5f3a\u70c8\u63a8\u8350",
+    "A": "\u63a8\u8350",
+    "B+": "\u79ef\u6781",
+    "B": "\u4e2d\u6027",
+    "C": "\u89c2\u671b",
+    "D": "\u56de\u907f"
+  },
+
+  "industry_weight_adjustments": {
+    "\u79d1\u6280": {"innovation": 0.15, "fundamental": 0.20},
+    "\u533b\u836f": {"innovation": 0.15, "fundamental": 0.20},
+    "\u65b0\u80fd\u6e90": {"innovation": 0.12, "fundamental": 0.23},
+    "\u767d\u9152": {"fundamental": 0.30, "innovation": 0.05},
+    "\u94f6\u884c": {"fundamental": 0.30, "innovation": 0.05},
+    "\u5730\u4ea7": {"capital": 0.20, "innovation": 0.05}
+  },
+
+  "factor_details": {
+    "value": {
+      "weight": 0.15,
+      "sub_factors": ["pe_ttm_pctl", "pb_pctl", "dividend_yield"]
+    },
+    "growth": {
+      "weight": 0.20,
+      "sub_factors": ["revenue_yoy", "profit_yoy", "roe_latest"]
+    },
+    "momentum": {
+      "weight": 0.15,
+      "sub_factors": ["price_change_5d", "price_change_10d", "ma5_ratio"]
+    },
+    "quality": {
+      "weight": 0.15,
+      "sub_factors": ["gross_margin", "debt_ratio", "flow_stability"]
+    },
+    "capital": {
+      "weight": 0.15,
+      "sub_factors": ["main_net_5d", "main_net_20d", "north_bound_chg"]
+    },
+    "sentiment": {
+      "weight": 0.10,
+      "sub_factors": ["news_sentiment_score", "analyst_consensus", "social_heat_idx"]
+    },
+    "technical": {
+      "weight": 0.10,
+      "sub_factors": ["rsi_14", "macd", "kdj_k"]
+    }
+  },
+
+  "ml_rule_mix": {
+    "ml_weight": 0.6,
+    "rule_weight": 0.4
+  }
+}

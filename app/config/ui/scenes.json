@@ -1,0 +1,29 @@
+{
+  "scenes": [
+    {
+      "type": "default",
+      "label": "默认",
+      "icon": "📊",
+      "canvas_type": null,
+      "description": "通用分析，组件纵向堆叠"
+    },
+    {
+      "type": "map",
+      "label": "地图分析",
+      "icon": "🌍",
+      "canvas_type": "map",
+      "description": "涉及空间位置的所有分析"
+    }
+  ],
+  "map_skills": [
+    "flight_tracker",
+    "geo_search",
+    "military_balance",
+    "satellite_imagery",
+    "street_view",
+    "route_planning",
+    "ship_tracker",
+    "weather_forecast",
+    "weather_realtime"
+  ]
+}

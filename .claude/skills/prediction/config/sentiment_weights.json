@@ -1,0 +1,28 @@
+{
+  "source_weights": {
+    "news": 0.35,
+    "social": 0.20,
+    "analyst": 0.25,
+    "capital": 0.20
+  },
+  "half_life_hours": 24,
+  "extreme_thresholds": {
+    "bullish": 0.7,
+    "bearish": 0.3
+  },
+  "keyword_weights": {
+    "strong": 0.15,
+    "moderate": 0.08,
+    "weak": 0.03
+  },
+  "score_thresholds": {
+    "positive": 0.55,
+    "negative": 0.45
+  },
+  "label_thresholds": [0.7, 0.6, 0.45, 0.3],
+  "reversal_indicators": {
+    "min_turnover_ratio": 2.0,
+    "min_volume_ratio": 1.5,
+    "sentiment_extreme_threshold": 0.8
+  }
+}

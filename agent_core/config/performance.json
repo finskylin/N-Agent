@@ -1,0 +1,44 @@
+{
+    "quality_focus": {
+        "lazy_load": true
+    },
+    "llm_race": {
+        "enabled": true,
+        "concurrency": 2,
+        "timeout_seconds": 20
+    },
+    "http_pool": {
+        "enabled": true,
+        "max_connections": 20,
+        "max_keepalive": 10,
+        "keepalive_expiry_seconds": 30
+    },
+    "post_process": {
+        "parallel_enabled": true
+    },
+    "session_compact": {
+        "async_enabled": true,
+        "cooldown_seconds": 30,
+        "threshold_bytes": 150000
+    },
+    "tool_cache": {
+        "enabled": true,
+        "default_ttl_seconds": 300,
+        "max_entries": 500
+    },
+    "small_fast_auxiliary": {
+        "enabled": true,
+        "affected_calls": [
+            "quality_focus", "distill", "feedback", "topics",
+            "reflection", "evolution", "user_profile"
+        ]
+    },
+    "token_count_cache": {
+        "enabled": true
+    },
+    "stream_progress": {
+        "enabled": true,
+        "init_message": "正在理解您的问题...",
+        "tool_message_template": "正在执行 {tool_name}..."
+    }
+}

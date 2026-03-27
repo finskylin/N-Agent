@@ -1,0 +1,19 @@
+{
+  "source": "https://huggingface.co/spaces/gaia-benchmark/leaderboard",
+  "last_updated": "2026-03-07",
+  "split": "validation",
+  "entries": [
+    {"agent": "Autogenesis (evolve tool)", "level1": 98.92, "level2": 85.53, "level3": 81.63, "average": 89.04},
+    {"agent": "HALO", "level1": 94.62, "level2": 84.91, "level3": 69.39, "average": 85.38},
+    {"agent": "AWorld", "level1": 95.70, "level2": 81.13, "level3": 57.14, "average": 81.73},
+    {"agent": "Su-Zero-Ultra", "level1": 93.55, "level2": 77.36, "level3": 65.31, "average": 80.40},
+    {"agent": "h2oGPTe-Agent", "level1": 89.25, "level2": 79.87, "level3": 61.22, "average": 79.73},
+    {"agent": "DeSearch", "level1": 91.40, "level2": 75.47, "level3": 61.22, "average": 78.07},
+    {"agent": "Alita", "level1": 92.47, "level2": 71.70, "level3": 55.10, "average": 75.42},
+    {"agent": "Langfun", "level1": 84.95, "level2": 73.58, "level3": 48.98, "average": 73.09},
+    {"agent": "o3-DR", "level1": 79.42, "level2": 68.97, "level3": 47.48, "average": 68.70},
+    {"agent": "JoyAgent", "level1": 77.42, "level2": 67.30, "level3": 46.94, "average": 67.11},
+    {"agent": "o4-mini-DR", "level1": 67.59, "level2": 59.10, "level3": 44.28, "average": 59.30},
+    {"agent": "Human", "level1": 92.0, "level2": 92.0, "level3": 92.0, "average": 92.0}
+  ]
+}

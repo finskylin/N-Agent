@@ -1,0 +1,47 @@
+{
+  "_comment": "LLM 端点链配置。priority 越小越优先。max_retry_endpoints 控制每次请求最多尝试几个端点。failover_threshold: 连续失败N次提升下一个端点，被降级端点连续成功N次后恢复。",
+  "max_retry_endpoints": 3,
+  "failover_threshold": 3,
+  "endpoints": [
+    {
+      "name": "dashscope",
+      "priority": 1,
+      "base_url": "${ANTHROPIC_BASE_URL_C}",
+      "api_key": "${ANTHROPIC_AUTH_TOKEN_C}",
+      "model": "${ANTHROPIC_MODEL_C}",
+      "small_fast_model": "${ANTHROPIC_SMALL_FAST_MODEL_C}",
+      "context_window": 131072,
+      "enabled": true
+    },
+    {
+      "name": "zhipu",
+      "priority": 2,
+      "base_url": "${ANTHROPIC_BASE_URL}",
+      "api_key": "${ANTHROPIC_AUTH_TOKEN}",
+      "model": "${ANTHROPIC_MODEL}",
+      "small_fast_model": "${ANTHROPIC_SMALL_FAST_MODEL}",
+      "context_window": 131072,
+      "enabled": true
+    },
+    {
+      "name": "zhipuD",
+      "priority": 3,
+      "base_url": "${ANTHROPIC_BASE_URL_D}",
+      "api_key": "${ANTHROPIC_AUTH_TOKEN_D}",
+      "model": "${ANTHROPIC_MODEL_D}",
+      "small_fast_model": "${ANTHROPIC_SMALL_FAST_MODEL_D}",
+      "context_window": 131072,
+      "enabled": true
+    },
+    {
+      "name": "litellm",
+      "priority": 4,
+      "base_url": "${ANTHROPIC_BASE_URL_BACKUP}",
+      "api_key": "${ANTHROPIC_AUTH_TOKEN_BACKUP}",
+      "model": "${ANTHROPIC_MODEL_BACKUP}",
+      "small_fast_model": "${ANTHROPIC_SMALL_FAST_MODEL_BACKUP}",
+      "context_window": 200000,
+      "enabled": true
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "base_position_pct": 0.3,
+  "confidence_divisor": 100,
+
+  "market_env_coefficients": {
+    "bull": 1.2,
+    "neutral": 1.0,
+    "bear": 0.6
+  },
+
+  "volatility_coefficients": {
+    "low": 1.2,
+    "medium": 1.0,
+    "high": 0.7
+  },
+
+  "volatility_thresholds": {
+    "low": 0.15,
+    "high": 0.30
+  },
+
+  "stop_loss": {
+    "fixed_pct": 0.08,
+    "atr_multiplier": 2.0,
+    "atr_period": 14
+  },
+
+  "take_profit": {
+    "target_price_pct": 0.9,
+    "trailing_pct": 0.05,
+    "max_hold_days": 20,
+    "min_profit_pct": 0.03
+  },
+
+  "position_thresholds": {
+    "strong_buy": 80,
+    "buy": 70,
+    "hold": 60,
+    "watch": 50
+  },
+
+  "position_sizes": {
+    "strong_buy": "30%",
+    "buy": "20%",
+    "hold": "10%",
+    "watch": "5%",
+    "avoid": "0%"
+  }
+}

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white">
+  <path d="M12 2l2 4v8l-2 2-2-2V6l2-4z"/>
+  <path d="M10 14l-3 4h2l1-2z"/>
+  <path d="M14 14l3 4h-2l-1-2z"/>
+  <polygon points="12,2 10.5,5 13.5,5"/>
+  <path d="M9 18l3 4 3-4" fill="none" stroke="white" stroke-width="1"/>
+  <path d="M9.5 19l2.5 3 2.5-3" fill="none" stroke="white" stroke-width="0.7"/>
+</svg>

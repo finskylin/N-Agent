@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white">
+  <path d="M12 3v14"/>
+  <line x1="12" y1="3" x2="12" y2="17" stroke="white" stroke-width="2"/>
+  <path d="M8 7c0-2.2 1.8-4 4-4s4 1.8 4 4-1.8 2-4 2-4 0.2-4-2z" fill="none" stroke="white" stroke-width="1.5"/>
+  <path d="M7 17l1-2h8l1 2"/>
+  <line x1="7" y1="17" x2="17" y2="17" stroke="white" stroke-width="1.5"/>
+  <path d="M5 20c1-1.5 2.5-1.5 3.5 0s2.5 1.5 3.5 0 2.5-1.5 3.5 0 2.5 1.5 3.5 0" fill="none" stroke="white" stroke-width="1.2"/>
+</svg>

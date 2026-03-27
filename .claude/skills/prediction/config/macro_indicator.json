@@ -1,0 +1,18 @@
+{
+  "weights": {
+    "liquidity": 0.30,
+    "prosperity": 0.25,
+    "valuation": 0.25,
+    "external": 0.20
+  },
+  "thresholds": {
+    "bullish": 70,
+    "neutral": 40
+  },
+  "indicators": {
+    "liquidity": ["m2_yoy", "social_financing", "shibor_3m"],
+    "prosperity": ["pmi", "industrial_production", "cpi"],
+    "valuation": ["market_pe_percentile", "equity_risk_premium"],
+    "external": ["usd_cny", "us_10y_yield", "vix"]
+  }
+}

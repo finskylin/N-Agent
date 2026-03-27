@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{TITLE}}</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; }
+  #chart { width: 100%; height: 100vh; }
+</style>
+</head>
+<body>
+<div id="chart"></div>
+<script>
+const DATA = {{DATA_JSON}};
+const chart = echarts.init(document.getElementById('chart'), 'dark');
+
+// 解析数据
+const dates = DATA.dates || DATA.data?.map(d => d.date || d.trade_date) || [];
+const ohlc = DATA.data?.map(d => [d.open, d.close, d.low, d.high]) || [];
+const volumes = DATA.data?.map(d => d.vol || d.volume || 0) || [];
+
+const option = {
+  backgroundColor: '#1a1a2e',
+  title: { text: '{{TITLE}}', left: 'center', top: 10, textStyle: { color: '#e0e0e0', fontSize: 16 } },
+  tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+  grid: [
+    { left: '8%', right: '4%', top: '12%', height: '55%' },
+    { left: '8%', right: '4%', top: '72%', height: '18%' }
+  ],
+  xAxis: [
+    { type: 'category', data: dates, gridIndex: 0, axisLabel: { show: false } },
+    { type: 'category', data: dates, gridIndex: 1 }
+  ],
+  yAxis: [
+    { scale: true, gridIndex: 0, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } } },
+    { scale: true, gridIndex: 1, splitLine: { show: false } }
+  ],
+  dataZoom: [
+    { type: 'inside', xAxisIndex: [0, 1], start: 70, end: 100 },
+    { type: 'slider', xAxisIndex: [0, 1], start: 70, end: 100 }
+  ],
+  series: [
+    {
+      name: 'K线', type: 'candlestick', data: ohlc, xAxisIndex: 0, yAxisIndex: 0,
+      itemStyle: {
+        color: '#ef5350', color0: '#26a69a',
+        borderColor: '#ef5350', borderColor0: '#26a69a'
+      }
+    },
+    {
+      name: '成交量', type: 'bar', data: volumes, xAxisIndex: 1, yAxisIndex: 1,
+      itemStyle: {
+        color: function(params) {
+          return ohlc[params.dataIndex] && ohlc[params.dataIndex][1] >= ohlc[params.dataIndex][0]
+            ? '#ef5350' : '#26a69a';
+        }
+      }
+    }
+  ]
+};
+
+chart.setOption(option);
+window.addEventListener('resize', () => chart.resize());
+</script>
+</body>
+</html>

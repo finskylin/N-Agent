@@ -1,0 +1,5 @@
+# AgentCore 最小依赖
+loguru>=0.7
+python-dotenv>=1.0
+pyyaml>=6.0
+aiosqlite>=0.19

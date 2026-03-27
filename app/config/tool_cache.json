@@ -1,0 +1,22 @@
+{
+    "enabled": true,
+    "default_ttl_seconds": 300,
+    "tool_ttl_overrides": {
+        "stock_query": 60,
+        "realtime_quote": 30,
+        "web_search": 300,
+        "historical_data": 600,
+        "financial_report": 600,
+        "stock_resolver": 3600,
+        "weather_realtime": 60,
+        "weather_forecast": 300,
+        "market_overview": 120,
+        "market_environment": 120
+    },
+    "max_entries": 500,
+    "exclude_tools": [
+        "toolbox_execute",
+        "sandbox_execute",
+        "dingtalk_private_message"
+    ]
+}

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{TITLE}}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: #e0e0e0; padding: 20px; min-height: 100vh;
+  }
+  .card {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(100,100,255,0.2);
+    border-radius: 16px; padding: 28px; margin-bottom: 16px;
+    backdrop-filter: blur(10px);
+  }
+  .card-title {
+    font-size: 18px; font-weight: 700; margin-bottom: 20px;
+    color: #fff; border-bottom: 1px solid rgba(100,100,255,0.2);
+    padding-bottom: 12px;
+  }
+  .score-main {
+    display: flex; align-items: center; gap: 24px; margin-bottom: 24px;
+  }
+  .score-circle {
+    width: 100px; height: 100px; border-radius: 50%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-size: 32px; font-weight: 800; border: 4px solid;
+  }
+  .score-label { font-size: 11px; opacity: 0.7; margin-top: 2px; }
+  .score-info { flex: 1; }
+  .score-info h2 { font-size: 22px; margin-bottom: 8px; }
+  .score-info .level { font-size: 14px; padding: 4px 12px; border-radius: 20px; display: inline-block; }
+  .dimensions { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  .dim-item {
+    background: rgba(255,255,255,0.04); border-radius: 10px; padding: 14px;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .dim-name { font-size: 13px; color: #999; margin-bottom: 6px; }
+  .dim-bar { height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
+  .dim-bar-fill { height: 100%; border-radius: 3px; transition: width 0.5s; }
+  .dim-score { font-size: 18px; font-weight: 700; margin-top: 6px; }
+  .recommendation {
+    margin-top: 20px; padding: 16px; border-radius: 10px;
+    background: rgba(91,155,213,0.15); border: 1px solid rgba(91,155,213,0.3);
+  }
+  .rec-action { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .rec-reason { font-size: 13px; color: #aaa; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="card-title">{{TITLE}}</div>
+  <div id="content"></div>
+</div>
+<script>
+const DATA = {{DATA_JSON}};
+
+function getScoreColor(score) {
+  if (score >= 80) return '#26a69a';
+  if (score >= 60) return '#5b9bd5';
+  if (score >= 40) return '#ffa726';
+  return '#ef5350';
+}
+
+let html = '';
+
+// 主评分区
+const totalScore = DATA.total_score || DATA.score || 0;
+const ratingLevel = DATA.rating_level || DATA.level || DATA.rating_code || '';
+const name = DATA.name || DATA.stock_name || '';
+const color = getScoreColor(totalScore);
+
+html += `
+<div class="score-main">
+  <div class="score-circle" style="border-color:${color};color:${color}">
+    ${totalScore.toFixed ? totalScore.toFixed(1) : totalScore}
+    <span class="score-label">综合评分</span>
+  </div>
+  <div class="score-info">
+    <h2>${name}</h2>
+    <span class="level" style="background:${color}30;color:${color}">${ratingLevel}</span>
+  </div>
+</div>
+`;
+
+// 维度评分
+const dimensions = DATA.dimensions || DATA.scores || {};
+if (typeof dimensions === 'object' && !Array.isArray(dimensions)) {
+  html += '<div class="dimensions">';
+  for (const [key, val] of Object.entries(dimensions)) {
+    const score = typeof val === 'number' ? val : (val.score || val.value || 0);
+    const dimColor = getScoreColor(score);
+    html += `
+    <div class="dim-item">
+      <div class="dim-name">${key}</div>
+      <div class="dim-bar"><div class="dim-bar-fill" style="width:${score}%;background:${dimColor}"></div></div>
+      <div class="dim-score" style="color:${dimColor}">${typeof score === 'number' ? score.toFixed(1) : score}</div>
+    </div>`;
+  }
+  html += '</div>';
+}
+
+// 推荐建议
+const rec = DATA.recommendation || {};
+if (rec.action) {
+  html += `
+  <div class="recommendation">
+    <div class="rec-action">💡 建议: ${rec.action}</div>
+    <div class="rec-reason">${rec.reason || ''}</div>
+  </div>`;
+}
+
+document.getElementById('content').innerHTML = html;
+</script>
+</body>
+</html>

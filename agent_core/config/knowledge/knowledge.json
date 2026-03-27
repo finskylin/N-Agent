@@ -1,0 +1,44 @@
+{
+  "enabled": true,
+  "base_dir": "app/knowledge",
+  "description": "本地知识库，Agent 可通过 Glob/Read/Grep 检索",
+  "categories": [
+    {
+      "path": "system",
+      "label": "系统知识库",
+      "description": "全局共享的参考资料（军事、地缘、分析框架等）",
+      "auto_inject": true
+    },
+    {
+      "path": "projects",
+      "label": "项目知识库",
+      "description": "按主题组织的专项资料",
+      "auto_inject": true
+    },
+    {
+      "path": "public",
+      "label": "公共上传知识库",
+      "description": "用户上传的公共知识文件",
+      "auto_inject": true
+    },
+    {
+      "path": "private",
+      "label": "私有知识库",
+      "description": "用户个人上传的私有文件",
+      "auto_inject": false
+    }
+  ],
+  "inject_rules": {
+    "max_tree_depth": 3,
+    "max_files_shown": 50,
+    "file_extensions": [".md", ".txt", ".json", ".csv", ".pdf", ".docx", ".xlsx", ".pptx", ".png", ".jpg", ".jpeg"],
+    "summary_max_overview_chars": 500,
+    "summary_max_keywords": 30,
+    "summary_file_name": "_summary.md"
+  },
+  "upload": {
+    "max_file_size_mb": 50,
+    "allowed_extensions": [".md", ".txt", ".json", ".csv", ".pdf", ".docx", ".xlsx", ".pptx", ".png", ".jpg", ".jpeg"],
+    "minio_bucket": "knowledge"
+  }
+}

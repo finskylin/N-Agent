@@ -1,0 +1,170 @@
+{
+  "_description": "Session Compact 配置 — 统一压缩内核 + 三种场景档位",
+
+  "detection": {
+    "_description": "CLI auto-compact 前置检测参数",
+    "compaction_block_type": "compaction",
+    "recent_threshold_messages": 10
+  },
+
+  "trigger": {
+    "_description": "应用层 compact 触发阈值，150KB 触发以配合 MemoryOS 承接",
+    "max_file_size_bytes": 153600,
+    "max_message_count": 60
+  },
+
+  "compact_strategy": {
+    "_description": "压缩策略参数（向后兼容，新逻辑优先使用 profiles.threshold_compact）",
+    "keep_recent_qa_pairs": 2,
+    "summary_max_chars": 1500,
+    "tool_result_max_chars": 200,
+    "tool_use_keep_fields": ["name", "type"]
+  },
+
+  "rebuild": {
+    "_description": "MySQL rebuild 时的压缩参数（向后兼容，新逻辑优先使用 profiles.rebuild）",
+    "max_rebuild_size_bytes": 153600,
+    "keep_recent_qa_pairs": 2,
+    "summary_max_chars": 1500,
+    "tool_result_max_chars": 200,
+    "min_message_threshold": 5
+  },
+
+  "conversation_history": {
+    "_description": "ConversationHistory 参数（context_manager.py）",
+    "max_raw_messages": 8,
+    "keep_recent": 3,
+    "max_total": 25
+  },
+
+  "token_limit_error_markers": [
+    "exceeds the model's maximum context length",
+    "input tokens exceeds"
+  ],
+
+  "compress_engine": {
+    "_description": "统一压缩内核配置 — 所有档位共享的通用参数",
+    "conclusion_field_names": [
+      "summary", "conclusion", "recommendation",
+      "总结", "结论", "建议", "操作建议",
+      "analysis_summary", "investment_advice",
+      "result_summary", "brief"
+    ],
+    "tool_use_keep_fields": ["name", "type"],
+    "user_message_strategy": "keep_all"
+  },
+
+  "profiles": {
+    "_description": "三种压缩档位：不同场景使用不同的松紧度",
+
+    "pre_request": {
+      "_description": "档位1: 每次请求前预压缩 — 20KB触发，配合MemoryOS承接丢失信息",
+      "enabled": true,
+      "min_file_size_to_trigger": 20480,
+      "tool_result_tiers": [
+        { "rounds_from_latest": 2, "max_chars": -1, "_desc": "最近2轮: 完整保留" },
+        { "rounds_from_latest": 4, "max_chars": 400, "_desc": "第3-4轮: 结论摘要" },
+        { "rounds_from_latest": 999, "max_chars": 80, "_desc": "更早: Skill名+一句话" }
+      ],
+      "assistant_text_tiers": [
+        { "rounds_from_latest": 2, "max_chars": -1 },
+        { "rounds_from_latest": 4, "max_chars": 1500 },
+        { "rounds_from_latest": 999, "max_chars": 300 }
+      ]
+    },
+
+    "threshold_compact": {
+      "_description": "档位2: 文件过大时的阈值压缩 — 只保留2轮完整，远历史极限压缩",
+      "keep_recent_qa_pairs": 2,
+      "tool_result_tiers": [
+        { "rounds_from_latest": 2, "max_chars": -1, "_desc": "最近2轮: 完整保留" },
+        { "rounds_from_latest": 4, "max_chars": 300, "_desc": "第3-4轮: 结论摘要" },
+        { "rounds_from_latest": 999, "max_chars": 50, "_desc": "更早: Skill名+一句话" }
+      ],
+      "assistant_text_tiers": [
+        { "rounds_from_latest": 2, "max_chars": -1 },
+        { "rounds_from_latest": 4, "max_chars": 1500 },
+        { "rounds_from_latest": 999, "max_chars": 150 }
+      ]
+    },
+
+    "rebuild": {
+      "_description": "档位3: 从 MySQL 重建 session — 极限压缩，配合MTM承接",
+      "max_rebuild_size_bytes": 153600,
+      "tool_result_tiers": [
+        { "rounds_from_latest": 2, "max_chars": -1, "_desc": "最近2轮: 完整保留" },
+        { "rounds_from_latest": 4, "max_chars": 300, "_desc": "第3-4轮: 结论摘要" },
+        { "rounds_from_latest": 999, "max_chars": 50, "_desc": "更早: Skill名+一句话" }
+      ],
+      "assistant_text_tiers": [
+        { "rounds_from_latest": 2, "max_chars": -1 },
+        { "rounds_from_latest": 4, "max_chars": 1500 },
+        { "rounds_from_latest": 999, "max_chars": 100 }
+      ]
+    }
+  },
+
+  "storage": {
+    "_description": "Session 上下文存储配置",
+    "backend": "sqlite",
+    "sqlite": {
+      "db_path_template": "app/data/sessions/{instance_id}/memory.db",
+      "wal_mode": true,
+      "busy_timeout_ms": 5000
+    },
+    "mysql_dual_write": false,
+    "redis_fallback": true
+  },
+
+  "context_window": {
+    "_description": "上下文窗口管控配置",
+    "override_tokens": 0,
+    "hard_min_tokens": 16000,
+    "warn_below_tokens": 32000,
+    "budget_ratios": {
+      "_note": "session_file 45%（保障多轮上下文），MemoryOS 启用，memory 15%",
+      "session_file": 0.45,
+      "system_prompt": 0.10,
+      "memory": 0.15,
+      "experience": 0.10,
+      "generation_reserve": 0.20
+    },
+    "memory_sub_ratios": {
+      "_note": "memory 预算内部再分配：MTM承接更多历史（55%），知识库略让渡（30%）",
+      "mtm_recall": 0.55,
+      "user_profile": 0.15,
+      "knowledge": 0.30
+    }
+  },
+
+  "memory_engine": {
+    "_description": "MemoryOS 三层记忆引擎配置（灰度开关，默认关闭）",
+    "enabled": true,
+    "mtm_max_pages": 200,
+    "mtm_heat_params": {
+      "alpha": 1.0,
+      "beta": 0.5,
+      "gamma": 2.0,
+      "tau": 168.0
+    },
+    "mtm_max_age_days": 90,
+    "ltm_promotion_threshold": 4.0,
+    "user_profile_enabled": true,
+    "cleanup_interval_hours": 24
+  },
+
+  "progressive_summarize": {
+    "_description": "渐进式摘要引擎配置",
+    "enabled": true,
+    "base_chunk_ratio": 0.40,
+    "min_chunk_ratio": 0.15,
+    "safety_margin": 1.2,
+    "summarization_overhead_tokens": 4096,
+    "staged_parts": 2,
+    "min_messages_for_split": 4,
+    "oversized_message_threshold": 0.5,
+    "identity_preservation": true,
+    "fallback_to_simple": true,
+    "enhance_compaction_summary": true
+  }
+}

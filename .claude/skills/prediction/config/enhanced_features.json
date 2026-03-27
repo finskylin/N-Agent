@@ -1,0 +1,81 @@
+{
+  "enabled": true,
+  "description": "增强特征工程配置 - 从外部Skill获取真实数据补充预测特征",
+
+  "feature_windows": {
+    "short_window": 5,
+    "medium_window": 20,
+    "long_window": 60,
+    "volatility_lookback": 252,
+    "unlock_forward_days": 30,
+    "excess_return_benchmark": "000300"
+  },
+
+  "normalization": {
+    "money_flow_scale": 1e8,
+    "north_hold_pct_scale": 10.0,
+    "north_consecutive_max": 20,
+    "margin_balance_chg_clip": 0.5,
+    "margin_buy_repay_ratio_clip": 5.0,
+    "dragon_inst_net_scale": 1e8,
+    "unlock_ratio_clip": 0.3,
+    "excess_return_clip": 0.2
+  },
+
+  "proxy_fallback": {
+    "enabled": true,
+    "description": "当外部数据不可用时使用价量代理特征"
+  },
+
+  "data_sources": {
+    "money_flow": {
+      "enabled": true,
+      "fallback_to_proxy": true,
+      "cache_ttl_seconds": 3600,
+      "market_detection": {
+        "sh_prefixes": ["6", "9"],
+        "sz_prefixes": ["0", "3"]
+      }
+    },
+    "northbound_capital": {
+      "enabled": true,
+      "fallback_to_proxy": true,
+      "cache_ttl_seconds": 3600
+    },
+    "margin_trading": {
+      "enabled": true,
+      "fallback_to_proxy": true,
+      "cache_ttl_seconds": 3600,
+      "exchange_detection": {
+        "sse_prefixes": ["6"],
+        "szse_prefixes": ["0", "3"]
+      }
+    },
+    "dragon_tiger": {
+      "enabled": true,
+      "fallback_to_proxy": true,
+      "cache_ttl_seconds": 7200,
+      "lookback_days": 30
+    },
+    "restricted_shares": {
+      "enabled": true,
+      "fallback_to_proxy": true,
+      "cache_ttl_seconds": 86400
+    }
+  },
+
+  "feature_defaults": {
+    "real_main_net_5d": 0.0,
+    "real_main_net_20d": 0.0,
+    "north_hold_pct_chg": 0.0,
+    "north_consecutive_days": 0.0,
+    "margin_balance_chg_rate": 0.0,
+    "margin_buy_repay_ratio": 0.5,
+    "dragon_inst_net_buy": 0.0,
+    "unlock_30d_ratio": 0.0,
+    "volatility_percentile": 0.5,
+    "excess_return_5d": 0.0,
+    "excess_return_20d": 0.0,
+    "chip_profit_ratio": 0.5
+  }
+}

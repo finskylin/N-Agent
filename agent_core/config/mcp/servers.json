@@ -1,0 +1,10 @@
+{
+  "$schema": "../schemas/mcp_servers.schema.json",
+  "version": "1.0.0",
+  "description": "MCP服务器配置 - 当前未使用，功能已迁移到Skills",
+  "servers": {},
+  "global_settings": {
+    "max_concurrent_servers": 5,
+    "default_timeout_seconds": 30
+  }
+}

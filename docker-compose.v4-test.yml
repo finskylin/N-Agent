@@ -1,0 +1,340 @@
+# ============================================================
+# V4 Agent 测试部署配置
+# ============================================================
+#
+# 使用方法:
+#   docker-compose -f docker-compose.v4-test.yml up -d
+#   docker-compose -f docker-compose.v4-test.yml logs -f
+#
+# 服务说明:
+#   - agent-service: 主 Agent 服务 (端口 ${AGENT_PORT:-8000})
+#   - agent-toolbox: Linux 工具箱 (SSH 端口 ${TOOLBOX_SSH_PORT:-12222})
+#   - v4-frontend:   V4 Chat 前端 (端口 ${V4_FRONTEND_PORT:-18080})
+#
+# MinIO / Flink 等基础设施服务请使用:
+#   scripts/toolbox/docker-compose.toolbox.yml
+#
+# ============================================================
+
+version: '3.8'
+
+services:
+  # ==========================================================
+  # Agent 主服务
+  # ==========================================================
+  agent-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+    container_name: agent-service
+    hostname: agent-service
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+    ports:
+      - "${AGENT_PORT:-8000}:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      # ============================================================
+      # 1. Claude CLI 全局目录（~/.claude/）
+      #    - 存储 session 文件、全局 skills、todos 等
+      #    - 多实例共享，支持 session 恢复和重建
+      # ============================================================
+      - claude-global:/root/.claude
+
+      # ============================================================
+      # 2. 项目工作目录覆盖挂载（代码目录只读，data/knowledge 单独挂载）
+      # ============================================================
+      - ./app/api:/app/app/api:ro
+      - ./app/agent:/app/app/agent:ro
+      - ./app/channels:/app/app/channels:ro
+      - ./app/db:/app/app/db:ro
+      - ./app/prompts:/app/app/prompts:ro
+      - ./app/services:/app/app/services:ro
+      - ./app/utils:/app/app/utils:ro
+      - ./app/config:/app/app/config:ro
+      - ./app/static:/app/app/static:ro
+      - ./app/hot_reload:/app/app/hot_reload:ro
+      - ./app/tools:/app/app/tools:ro
+      - ./app/config.py:/app/app/config.py:ro
+      - ./app/main.py:/app/app/main.py:ro
+      - ./agent_core:/app/agent_core:ro
+      - ./CLAUDE.md:/app/CLAUDE.md:ro
+
+      # ============================================================
+      # 3. 技能目录（热加载支持）
+      # ============================================================
+      - ./.claude/skills:/app/.claude/skills:rw
+
+      # ============================================================
+      # 4. 前端组件 Bundle（VueComponentRenderer 使用）
+      # ============================================================
+      - ../sthg_frontend_project/dist/components:/app/app/static/components:ro
+
+      # ============================================================
+      # 5. 数据目录（读写）
+      # ============================================================
+      - agent-data:/app/app/data
+      - agent-logs:/app/logs
+      - ssh-keys:/root/.ssh
+
+      # 挂载知识库目录到容器内（rw: 支持上传写入和摘要生成）
+      - ./app/knowledge:/app/app/knowledge:rw
+
+      # ============================================================
+      # 6. Docker socket（DinD 模式，允许 docker_operator 管理容器）
+      # ============================================================
+      - /var/run/docker.sock:/var/run/docker.sock
+
+      # ============================================================
+      # 7. 共享 toolbox 日志卷（TaskMonitor 读取 .done 文件用）
+      #    toolbox 任务脚本写入 /opt/agent-workspace/logs/<task>.log.done
+      #    agent-service TaskMonitor 读取同路径判断任务完成
+      # ============================================================
+      - toolbox-logs:/opt/agent-workspace/logs:ro
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Shanghai
+      - APP_NAME=${APP_NAME:-Stock Agent Service}
+      - APP_VERSION=${APP_VERSION:-1.0.0}
+      - DEBUG=${DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - TOOLBOX_HOST=agent-toolbox
+      - TOOLBOX_PORT=22
+      - TOOLBOX_USER=root
+      - TOOLBOX_SSH_KEY_PATH=/root/.ssh/id_ed25519
+      - HTTP_PROXY=http://clash:7890
+      - HTTPS_PROXY=http://clash:7890
+      - http_proxy=http://clash:7890
+      - https_proxy=http://clash:7890
+      - NO_PROXY=localhost,127.0.0.1,agent-toolbox,v4-frontend,clash,.dingtalk.com,.bigmodel.cn,.baidu.com,.sina.com,.sina.com.cn,.sogou.com,.so.com,.zhihu.com,.bilibili.com,.douyin.com,.toutiao.com,.weibo.com,.qq.com,.163.com,.sohu.com,.csdn.net,.cnki.net,.gov.cn,.com.cn,.cn,.tushare.pro,.akshare.com,.eastmoney.com,.10jqka.com.cn,.gtimg.cn,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12
+      - no_proxy=localhost,127.0.0.1,agent-toolbox,v4-frontend,clash,.dingtalk.com,.bigmodel.cn,.baidu.com,.sina.com,.sina.com.cn,.sogou.com,.so.com,.zhihu.com,.bilibili.com,.douyin.com,.toutiao.com,.weibo.com,.qq.com,.163.com,.sohu.com,.csdn.net,.cnki.net,.gov.cn,.com.cn,.cn,.tushare.pro,.akshare.com,.eastmoney.com,.10jqka.com.cn,.gtimg.cn,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12
+      - DATABASE_URL=sqlite+aiosqlite:////app/app/data/agent.db
+      - CRON_STORE_PATH=/app/app/data/cron/jobs.json
+      - V4_SESSION_STORAGE_BACKEND=sqlite
+      - V4_DEFAULT_USER_ID=1
+      # === Session 管理 v2 配置 ===
+      - AGENT_INSTANCE_ID=${AGENT_INSTANCE_ID:-agent-01}
+      - CLAUDE_DIR=/root/.claude
+      - V4_SESSION_REBUILD_MAX_SIZE=${V4_SESSION_REBUILD_MAX_SIZE:-184320}
+      - V4_POLICY_ERROR_CLEANUP_ENABLED=${V4_POLICY_ERROR_CLEANUP_ENABLED:-true}
+      - V4_SESSION_AUTO_REBUILD_ENABLED=${V4_SESSION_AUTO_REBUILD_ENABLED:-true}
+      # DingTalk Stream Mode (钉钉机器人)
+      - DINGTALK_ENABLED=${DINGTALK_ENABLED:-true}
+      - DINGTALK_CLIENT_ID=${DINGTALK_CLIENT_ID:-dinghhkrqaeqr9robkur}
+      - DINGTALK_CLIENT_SECRET=${DINGTALK_CLIENT_SECRET:-7jXW5Dz0eJ3n6CJkwlxsZaKPs5YdDnKsy4utQEr1zfRtogXW6UU95PwRa2LHbZuf}
+      # Feishu (飞书机器人)
+      - FEISHU_ENABLED=${FEISHU_ENABLED:-false}
+      - FEISHU_APP_ID=${FEISHU_APP_ID:-}
+      - FEISHU_APP_SECRET=${FEISHU_APP_SECRET:-}
+      - FEISHU_ENCRYPT_KEY=${FEISHU_ENCRYPT_KEY:-}
+      - FEISHU_VERIFICATION_TOKEN=${FEISHU_VERIFICATION_TOKEN:-}
+      - FEISHU_DOMAIN=${FEISHU_DOMAIN:-feishu}
+      # === 外部访问配置 ===
+      - AGENT_EXTERNAL_HOST=${AGENT_EXTERNAL_HOST:-}
+      - AGENT_SERVICE_PORT=${AGENT_PORT:-8000}
+      # 宿主机局域网 IP（启动时自动检测注入，用于生成 MinIO 等对外 URL）
+      - HOST_LAN_IP=${HOST_LAN_IP:-}
+      # === 组件 Bundle 内网地址（供 VueComponentRenderer 和 Playwright 截图使用）===
+      - AGENT_INTERNAL_HOST=agent-service
+      # === MinIO 配置（由 toolbox compose 管理，通过宿主机端口访问）===
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-host.docker.internal:19000}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_SECURE=false
+      # 外部可访问的 MinIO URL（用于生成对外下载链接）
+      - MINIO_PUBLIC_URL=${MINIO_PUBLIC_URL:-}
+      # === Ring 2: Skill 进化 ===
+      - SKILL_EVOLUTION_ENABLED=${SKILL_EVOLUTION_ENABLED:-true}
+      # === GitHub 配置 ===
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - GITHUB_SKILL_TOKEN=${GITHUB_SKILL_TOKEN:-}
+    depends_on:
+      clash:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - agent-network
+    healthcheck:
+      test: ["CMD", "curl", "--noproxy", "localhost", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ==========================================================
+  # Clash 代理服务（容器内独立代理，不依赖宿主机 Clash）
+  # ==========================================================
+  clash:
+    image: dreamacro/clash:latest
+    container_name: clash
+    hostname: clash
+    volumes:
+      - ./clash.yaml:/root/.config/clash/config.yaml:ro
+    # 端口只暴露到容器内网，不占用宿主机端口（宿主机 Clash 已占用 7890）
+    expose:
+      - "7890"
+      - "7891"
+      - "9090"
+    restart: unless-stopped
+    networks:
+      - agent-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "--header=Authorization: Bearer hitun", "http://localhost:9090/version"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ==========================================================
+  # Agent 工具箱 (Linux 执行环境)
+  # ==========================================================
+  agent-toolbox:
+    build:
+      context: ./scripts/toolbox
+      dockerfile: Dockerfile.toolbox
+      args:
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+    container_name: agent-toolbox
+    hostname: agent-toolbox
+    ports:
+      - "${TOOLBOX_SSH_PORT:-12222}:22"
+      - "${TOOLBOX_CRON_UI_PORT:-18001}:8001"  # crontab-ui Web 管理界面
+    volumes:
+      - toolbox-data:/opt/agent-workspace/data
+      - toolbox-logs:/opt/agent-workspace/logs
+      - toolbox-jobs:/opt/agent-workspace/jobs
+      - toolbox-scripts:/opt/agent-workspace/scripts
+      # 配置和回调目录（定时任务依赖）
+      - toolbox-config:/opt/agent-workspace/config
+      - toolbox-callbacks:/opt/agent-workspace/callbacks
+      # crontab 持久化（容器重启后恢复定时任务）
+      - toolbox-crontab-sys:/var/spool/cron/crontabs
+      - toolbox-crontab-ui:/opt/agent-workspace/crontab-ui
+      # Python venv 持久化（runtime pip install 的包不会因重建镜像丢失）
+      - toolbox-venv:/opt/agent-workspace/venv
+      - ssh-keys:/tmp/ssh-keys:ro
+    environment:
+      - TZ=Asia/Shanghai
+      - AGENT_SERVICE_URL=http://agent-service:8000
+      - AGENT_SERVICE_API_KEY=${AGENT_SERVICE_API_KEY:-}
+      # 钉钉配置（cron_task_runner.py 需要）
+      - DINGTALK_WEBHOOK=${DINGTALK_WEBHOOK:-}
+      - DINGTALK_CLIENT_ID=${DINGTALK_CLIENT_ID:-}
+      - DINGTALK_CLIENT_SECRET=${DINGTALK_CLIENT_SECRET:-}
+      # MinIO 配置（由 toolbox compose 管理，通过宿主机端口访问）
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT:-host.docker.internal:19000}
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_SECURE=false
+      - MINIO_PUBLIC_URL=${MINIO_PUBLIC_URL:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      # 代理：复用 docker-v4 内置 clash 容器，与 agent-service 走同一代理
+      - HTTP_PROXY=http://clash:7890
+      - HTTPS_PROXY=http://clash:7890
+      - http_proxy=http://clash:7890
+      - https_proxy=http://clash:7890
+      - NO_PROXY=localhost,127.0.0.1,agent-service,agent-toolbox,v4-frontend,clash,.dingtalk.com,.bigmodel.cn,.baidu.com,.sina.com,.sina.com.cn,.sogou.com,.so.com,.zhihu.com,.bilibili.com,.douyin.com,.toutiao.com,.weibo.com,.qq.com,.163.com,.sohu.com,.csdn.net,.cnki.net,.gov.cn,.com.cn,.cn,.tushare.pro,.akshare.com,.eastmoney.com,.10jqka.com.cn,.gtimg.cn,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12
+      - no_proxy=localhost,127.0.0.1,agent-service,agent-toolbox,v4-frontend,clash,.dingtalk.com,.bigmodel.cn,.baidu.com,.sina.com,.sina.com.cn,.sogou.com,.so.com,.zhihu.com,.bilibili.com,.douyin.com,.toutiao.com,.weibo.com,.qq.com,.163.com,.sohu.com,.csdn.net,.cnki.net,.gov.cn,.com.cn,.cn,.tushare.pro,.akshare.com,.eastmoney.com,.10jqka.com.cn,.gtimg.cn,192.168.0.0/16,10.0.0.0/8,172.16.0.0/12
+      # === 视觉模型配置（供 toolbox 脚本调用视觉 API 使用）===
+      - VISION_API_BASE_URL=${VISION_API_BASE_URL:-}
+      - VISION_API_KEY=${VISION_API_KEY:-}
+      - VISION_MODEL=${VISION_MODEL:-}
+      # === GitHub 配置 (用于代码下载) ===
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+    # === 资源限制 ===
+    deploy:
+      resources:
+        limits:
+          memory: 5G
+        reservations:
+          memory: 2G
+    depends_on:
+      clash:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - agent-network
+    healthcheck:
+      test: ["CMD", "/opt/agent-workspace/health_check.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        while [ ! -f /tmp/ssh-keys/id_ed25519.pub ]; do
+          echo "Waiting for SSH public key..."
+          sleep 2
+        done
+        mkdir -p /root/.ssh
+        cp /tmp/ssh-keys/id_ed25519.pub /root/.ssh/authorized_keys
+        chmod 600 /root/.ssh/authorized_keys
+        chmod 700 /root/.ssh
+        echo "SSH authorized_keys configured"
+        exec /start.sh
+
+  # ==========================================================
+  # V4 Chat 前端 (Nginx)
+  # ==========================================================
+  v4-frontend:
+    image: nginx:1.25-alpine
+    container_name: v4-frontend
+    hostname: v4-frontend
+    environment:
+      - TZ=Asia/Shanghai
+      # 宿主机代理地址（用于 NGINX 访问 OSM）
+      - HOST_PROXY=${HOST_PROXY:-http://host.docker.internal:7890}
+    ports:
+      - "${V4_FRONTEND_PORT:-18080}:80"
+    volumes:
+      - ../sthg_frontend_project/dist:/usr/share/nginx/html:ro
+      - ../sthg_frontend_project/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # 瓦片缓存目录
+      - osm-tiles-cache:/var/cache/nginx/osm:rw
+    extra_hosts:
+      # Docker Desktop: 使用 host.docker.internal 访问宿主机
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    networks:
+      - agent-network
+
+# ==========================================================
+# 网络配置
+# ==========================================================
+networks:
+  agent-network:
+    name: agent-network
+    driver: bridge
+
+# ==========================================================
+# 数据卷配置
+# ==========================================================
+volumes:
+  # Claude CLI 全局目录卷 (多实例共享)
+  claude-global:
+    driver: local
+  agent-data:
+  agent-logs:
+  toolbox-data:
+  toolbox-logs:
+  toolbox-jobs:
+  toolbox-scripts:
+  toolbox-config:       # dingtalk_env.sh、notification.json
+  toolbox-callbacks:    # cron 回调上下文 JSON
+  toolbox-crontab-sys:  # 系统 crontab 持久化
+  toolbox-crontab-ui:   # crontab-ui Web 界面数据
+  toolbox-venv:         # Python venv 持久化（runtime pip install 包保留）
+  ssh-keys:
+  # OSM 瓦片缓存卷
+  osm-tiles-cache:
+    driver: local

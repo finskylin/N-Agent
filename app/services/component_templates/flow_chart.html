@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{TITLE}}</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; }
+  #chart { width: 100%; height: 100vh; }
+</style>
+</head>
+<body>
+<div id="chart"></div>
+<script>
+const DATA = {{DATA_JSON}};
+const chart = echarts.init(document.getElementById('chart'), 'dark');
+
+// 资金流向数据解析
+const inflow = DATA.main_inflow || DATA.inflow || [];
+const outflow = DATA.main_outflow || DATA.outflow || [];
+const dates = DATA.dates || DATA.data?.map(d => d.date) || [];
+const netFlow = DATA.net_flow || DATA.data?.map(d => d.net_amount || 0) || [];
+
+// 如果有详细的分类数据
+const superLarge = DATA.super_large || [];
+const large = DATA.large || [];
+const medium = DATA.medium || [];
+const small = DATA.small || [];
+
+const option = {
+  backgroundColor: '#1a1a2e',
+  title: { text: '{{TITLE}}', left: 'center', top: 10, textStyle: { color: '#e0e0e0', fontSize: 16 } },
+  tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+  legend: { top: 40, textStyle: { color: '#999' } },
+  grid: { left: '8%', right: '4%', top: '18%', bottom: '12%' },
+  xAxis: { type: 'category', data: dates, axisLabel: { color: '#999' } },
+  yAxis: {
+    type: 'value', name: '万元',
+    axisLabel: { color: '#999' },
+    splitLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } }
+  },
+  series: netFlow.length > 0 ? [
+    {
+      name: '净流入', type: 'bar', data: netFlow,
+      itemStyle: {
+        color: function(params) { return params.value >= 0 ? '#ef5350' : '#26a69a'; }
+      }
+    }
+  ] : [
+    { name: '主力流入', type: 'bar', stack: 'inflow', data: inflow, itemStyle: { color: '#ef5350' } },
+    { name: '主力流出', type: 'bar', stack: 'outflow', data: outflow.map(v => -Math.abs(v)), itemStyle: { color: '#26a69a' } }
+  ]
+};
+
+chart.setOption(option);
+window.addEventListener('resize', () => chart.resize());
+</script>
+</body>
+</html>
