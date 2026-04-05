@@ -48,6 +48,7 @@ class V4AgentRequest:
     langfuse_trace: Any = None
     attached_files: List[Dict[str, Any]] = field(default_factory=list)
     callbacks: Any = None
+    skip_memory: bool = False  # eval 模式：跳过记忆/蒸馏/反思等后处理写入
 
 
 @dataclass

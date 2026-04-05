@@ -121,17 +121,14 @@ Agent 回答（节选）：
         )
 
         try:
-            result = await asyncio.wait_for(
-                self._llm_call(
-                    prompt=prompt,
-                    use_small_fast=True,
-                    max_tokens=512,
-                    timeout=8.0,
-                ),
-                timeout=10.0,
+            result = await self._llm_call(
+                prompt=prompt,
+                use_small_fast=True,
+                max_tokens=512,
+                timeout=8.0,
             )
         except asyncio.TimeoutError:
-            logger.debug("[PredictionExtractor] LLM call timed out (5s)")
+            logger.debug("[PredictionExtractor] LLM call timed out")
             return []
         except Exception as e:
             logger.debug(f"[PredictionExtractor] LLM call failed: {e}")

@@ -14,6 +14,15 @@ from __future__ import annotations
 from typing import Optional
 from loguru import logger
 
+# 延迟导入，避免循环引用
+def _estimate_tokens(text: str) -> int:
+    try:
+        from agent_core.session.context_window_guard import ContextWindowGuard
+        return ContextWindowGuard.estimate_tokens(text)
+    except Exception:
+        # fallback: chars / 4
+        return len(text) // 4
+
 
 class ContextCompactor:
     """
@@ -44,7 +53,7 @@ class ContextCompactor:
     async def maybe_compact(
         self,
         context_builder,    # ContextBuilder
-        token_budget: int,  # 以 token 数计（chars // 4 估算）
+        token_budget: int,  # 以 token 数计（由 ContextWindowGuard 提供）
     ) -> bool:
         """
         检查 token 阈值，超过则执行 LLM 摘要压缩
@@ -59,13 +68,12 @@ class ContextCompactor:
         if not messages:
             return False
 
-        # 估算当前 token 数（字符数 / 4 粗估）
-        current_chars = sum(
-            len(str(m.get("content", "")))
+        # 估算当前 token 数（CJK/英文混排感知，比 chars//4 更准确）
+        current_tokens = sum(
+            _estimate_tokens(self._msg_to_text(m))
             for m in messages
             if isinstance(m, dict)
         )
-        current_tokens = current_chars // 4
 
         if current_tokens <= self._threshold * token_budget:
             return False
@@ -120,31 +128,35 @@ class ContextCompactor:
         )
         return True
 
+    @staticmethod
+    def _msg_to_text(m: dict) -> str:
+        """从单条消息提取纯文本（处理多模态 content list）"""
+        content = m.get("content", "")
+        if isinstance(content, list):
+            return " ".join(
+                block.get("text", "")
+                for block in content
+                if isinstance(block, dict) and block.get("type") == "text"
+            )
+        return str(content) if content else ""
+
     def _extract_text(self, messages: list) -> str:
-        """从消息列表提取文本内容"""
+        """从消息列表提取文本内容，每条截断 800 字符避免摘要输入过大"""
         parts = []
         for m in messages:
             if not isinstance(m, dict):
                 continue
             role = m.get("role", "")
-            content = m.get("content", "")
-            if isinstance(content, list):
-                # 多模态消息
-                text_parts = [
-                    block.get("text", "")
-                    for block in content
-                    if isinstance(block, dict) and block.get("type") == "text"
-                ]
-                content = " ".join(text_parts)
-            if content and isinstance(content, str):
-                parts.append(f"{role}: {content[:500]}")
+            text = self._msg_to_text(m)
+            if text:
+                parts.append(f"{role}: {text[:800]}")
         return "\n".join(parts)
 
     async def _call_summarize(self, text: str) -> str:
         """
         调用 LLM 生成对话摘要（中文，1500字以内）
 
-        使用非流式调用，fallback 为截断。
+        优先非流式 chat()，fallback 为收集 chat_stream()，再 fallback 截断。
         """
         system = "你是一个对话摘要助手。请用简洁的中文总结以下对话历史，保留关键信息、用户意图和已获取的数据要点，不超过1500字。"
         messages = [
@@ -152,18 +164,17 @@ class ContextCompactor:
         ]
 
         try:
-            # 尝试非流式调用
             if hasattr(self._llm, "chat"):
+                # LLMResponse.content 是字符串
                 response = await self._llm.chat(
                     messages=messages,
                     system=system,
                     max_tokens=1500,
+                    timeout=60.0,
                 )
-                if isinstance(response, dict):
-                    return response.get("content", text[:1500])
-                return str(response)[:1500]
+                return (response.content or text[:1500])[:1500]
 
-            # 降级：收集流式输出
+            # fallback：收集流式输出
             summary_parts = []
             async for event in self._llm.chat_stream(
                 messages=messages,
@@ -174,7 +185,7 @@ class ContextCompactor:
                     summary_parts.append(event.get("delta", ""))
                 elif event.get("type") == "llm_response":
                     break
-            return "".join(summary_parts)[:1500]
+            return "".join(summary_parts)[:1500] or text[:1500]
 
         except Exception as e:
             logger.warning(f"[ContextCompactor] _call_summarize failed: {e}")

@@ -23,7 +23,12 @@ class LLMResponse:
     content: Optional[str] = None                          # 文本内容（stop 时有值）
     tool_calls: List[ToolCallRequest] = field(default_factory=list)
     finish_reason: str = "stop"                            # stop | tool_use | max_tokens | error
-    usage: Dict[str, int] = field(default_factory=dict)    # input_tokens, output_tokens
+    usage: Dict[str, int] = field(default_factory=dict)
+    # usage 字段包含：
+    # - input_tokens                  — 本轮输入 token 数
+    # - output_tokens                 — 本轮输出 token 数
+    # - cache_read_input_tokens       — P0 缓存命中读取（Anthropic prompt caching）
+    # - cache_creation_input_tokens   — P0 缓存写入（Anthropic prompt caching）
     thinking_content: Optional[str] = None                 # extended thinking 内容
     thinking_signature: Optional[str] = None               # dashscope/anthropic thinking 签名（回写多轮必须携带）
     model: str = ""

@@ -831,7 +831,7 @@ if DINGTALK_AVAILABLE:
                                 # Phase 1 已去掉，LLM 的第一段文字就是确认语，直接发出
                                 ack_buffer.append(delta)
                                 ack_text = "".join(ack_buffer).strip()
-                                # 遇到句末标点立即发出，或积累到50字兜底，避免截断半句话
+                                # 遇到句末标点立即发出，不限制最大字数
                                 _sentence_end_chars = ("。", "！", "？", "…", ".", "!", "?")
                                 _cut_pos = -1
                                 for _i, _c in enumerate(ack_text):
@@ -839,13 +839,12 @@ if DINGTALK_AVAILABLE:
                                         _cut_pos = _i
                                         break
                                 if _cut_pos >= 0:
-                                    # 截断到第一个句末标点（含），把后面内容退回正文
                                     _tail = ack_text[_cut_pos + 1:]
                                     ack_text = ack_text[:_cut_pos + 1]
                                     if _tail:
                                         text_chunks.append(_tail)
                                 _sentence_end = _cut_pos >= 0
-                                if ack_text and (_sentence_end or len(ack_text) >= 50):
+                                if ack_text and _sentence_end:
                                     # 保存原始 ack 文字，供 result 为空时兜底使用
                                     _ack_text_original = ack_text
                                     # 附件场景防护

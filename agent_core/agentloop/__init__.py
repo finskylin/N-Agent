@@ -74,6 +74,9 @@ from .subagent import SubAgentExecutor
 # Ring 3: 能力盲区检测
 from .capability_gap_counter import CapabilityGapCounter
 
+# Token 优化: 大型工具结果语义压缩
+from .tool_result_summarizer import ToolResultSummarizer
+
 __all__ = [
     # 核心组件
     "AgentLoop",
@@ -115,4 +118,6 @@ __all__ = [
     "SubAgentExecutor",
     # Ring 3
     "CapabilityGapCounter",
+    # Token 优化
+    "ToolResultSummarizer",
 ]

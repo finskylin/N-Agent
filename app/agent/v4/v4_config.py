@@ -57,8 +57,8 @@ class V4Config(_CoreV4Config):
             "memory_engine_enabled": getattr(settings, "v4_memory_engine_enabled",
                 _to_bool(os.environ.get("MEMORY_ENGINE_ENABLED", "false"))),
             # AgentLoop
-            "max_iterations": getattr(settings, "v4_max_iterations", 30),
-            "max_timeout_seconds": getattr(settings, "v4_max_timeout_seconds", 720),
+            "max_iterations": int(os.environ.get("V4_MAX_ITERATIONS", getattr(settings, "v4_max_iterations", 100))),
+            "max_timeout_seconds": int(os.environ.get("V4_MAX_TIMEOUT_SECONDS", getattr(settings, "v4_max_timeout_seconds", 3600))),
             # Parallel
             "parallel_tool_execution": getattr(settings, "v4_parallel_tool_execution", True),
             "parallel_max_concurrent": getattr(settings, "v4_parallel_max_concurrent", 8),
@@ -71,7 +71,9 @@ class V4Config(_CoreV4Config):
             # SubAgent
             "subagent_enabled": getattr(settings, "v4_subagent_enabled", True),
             "subagent_max_depth": getattr(settings, "v4_subagent_max_depth", 3),
-            "subagent_max_iterations": getattr(settings, "v4_subagent_max_iterations", 10),
+            "subagent_max_iterations": int(os.environ.get("V4_SUBAGENT_MAX_ITERATIONS", getattr(settings, "v4_subagent_max_iterations", 100))),
+            "bg_subagent_max_iterations": int(os.environ.get("V4_BG_SUBAGENT_MAX_ITERATIONS", 0)),
+            "bg_subagent_max_timeout_seconds": int(os.environ.get("V4_BG_SUBAGENT_MAX_TIMEOUT_SECONDS", 18000)),
             # MCP / Sandbox
             "mcp_tools_enabled": getattr(settings, "v4_mcp_tools_enabled", False),
             "sandbox_provider": getattr(settings, "v4_sandbox_provider", "auto") or "auto",

@@ -14,43 +14,76 @@
 
 ## 部署方式
 
-### Toolbox 部署（必须，所有开发任务的标准部署方式）
+### Toolbox 部署（标准开发执行环境）
 
-所有服务必须在 toolbox（`agent-toolbox` 容器）中运行，不得在 agent-service 容器中启动服务。
+所有开发、编译、脚本执行任务在 toolbox（`agent-toolbox` 容器）中进行。
 
-**标准流程：**
+**⚠️ 关键限制：toolbox 端口映射只有两个，不可随意在 toolbox 里起 HTTP 服务对外暴露：**
+- `22 → 12222`（SSH，不可用于 Web）
+- `8001 → 18001`（crontab-ui，已占用）
+
+**因此，在 toolbox 中启动的 HTTP 服务无法被外部用户直接访问。**
+
+---
+
+### 对外提供 Web 访问的正确方式
+
+需要给用户提供可访问的 URL 时，有以下两种方式：
+
+#### 方式一：通过 agent-service 静态文件服务（推荐，适合单页 HTML/小文件）
+
+agent-service 挂载了 `/app/app/data/` 目录，且主服务端口 8000 对宿主机可见。
 
 ```bash
-# 1. 在 toolbox 中启动服务（通过 docker_operator）
-docker_operator: {
-  "action": "exec",
-  "command": "cd /opt/agent-workspace/{项目名} && docker-compose up -d"
-}
+# 1. 在 toolbox 中生成文件，写入 /opt/agent-workspace/{项目名}/
+docker_operator: {"action": "toolbox_action", "toolbox_action": "command",
+  "command": "mkdir -p /opt/agent-workspace/{项目名} && cat > /opt/agent-workspace/{项目名}/index.html << 'EOF'\n...内容...\nEOF"}
 
-# 2. 确认服务启动成功
-docker_operator: {
-  "action": "exec",
-  "command": "curl -s http://localhost:{端口}/health"
-}
-
-# 3. 获取宿主机 IP（用于告知用户访问地址）
-docker_operator: {
-  "action": "exec",
-  "command": "curl -s ifconfig.me || hostname -I | awk '{print $1}'"
-}
+# 2. 通过 agent-service 的 /api/v1/files/serve 或 object_storage 路径提供下载
+#    或将文件写入 MinIO，返回 MinIO 公网 URL
 ```
 
-**端口映射说明：**
-- toolbox 容器的端口已通过 docker-compose 映射到宿主机
-- 用户访问地址为：`http://宿主机IP:{宿主机端口}`
-- 部署完成后**必须**在验收报告中明确写出完整访问地址
+实际上最简单的方式：把 HTML 内容通过 MinIO 上传，返回 MinIO 公网 URL，用户直接浏览器打开。
 
-**docker-compose.yml 端口配置要求：**
-```yaml
-services:
-  app:
-    ports:
-      - "${HOST_PORT:-8080}:${APP_PORT:-8000}"  # 宿主机端口:容器端口，必须配置化
+```bash
+# 写入 MinIO（通过 toolbox）
+docker_operator: {"action": "toolbox_action", "toolbox_action": "command",
+  "command": "python3 -c \"\nimport boto3, os\ns3 = boto3.client('s3', endpoint_url=os.environ['MINIO_ENDPOINT'], ...)\ns3.put_object(Bucket='public', Key='{项目名}/index.html', Body=open('index.html','rb').read(), ContentType='text/html')\n\""}
+```
+
+#### 方式二：通过 v4-frontend（nginx）反向代理（适合需要持久运行的服务）
+
+v4-frontend 容器是 nginx，端口 18080 对外暴露。可以在 toolbox 里把 HTML 文件写到 nginx 的静态目录。
+但 v4-frontend 挂载的是前端 dist 目录，不建议污染。
+
+#### 方式三：使用 agent-service 的 report/file 下载链接（最常用）
+
+生成 HTML 文件后，调用 report_generator 或直接写入 `/app/app/data/object_storage/`，通过 `AGENT_EXTERNAL_HOST` 构造下载 URL。
+
+```bash
+# agent-service 内的 object_storage 路径对应公网 URL
+# URL 格式：http://{AGENT_EXTERNAL_HOST}:{AGENT_SERVICE_PORT}/files/{文件名}
+# 获取宿主机 IP：
+curl -s http://agent-service:8000/api/v1/chat/v4/status | python3 -c "import sys,json; d=json.load(sys.stdin); print(d)"
+# 或在 toolbox 中：
+env | grep AGENT_SERVICE_URL
+```
+
+---
+
+**标准部署流程（toolbox 内执行任务）：**
+
+```bash
+# 1. 在 toolbox 中完成开发构建
+docker_operator: {"action": "toolbox_action", "toolbox_action": "command",
+  "command": "cd /opt/agent-workspace/{项目名} && ...构建命令..."}
+
+# 2. 确认 toolbox 内服务正常（内网验证）
+docker_operator: {"action": "toolbox_action", "toolbox_action": "command",
+  "command": "curl -s http://localhost:{内网端口}/health"}
+
+# 3. 获取对外访问 URL（选方式一：生成文件 → MinIO / agent-service files）
+#    不要尝试让 toolbox 的 HTTP 服务直接对外暴露
 ```
 
 ### Docker 部署（推荐）

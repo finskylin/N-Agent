@@ -401,7 +401,7 @@ async def _action_toolbox(params: Dict[str, Any]) -> Dict[str, Any]:
     # ── file_write ──
     elif toolbox_action == "file_write":
         path = params.get("file_path", "")
-        content = params.get("file_content", "")
+        content = params.get("file_content", "") or params.get("content", "")
         if not path:
             return {"success": False, "error": "file_path 必填", "exec_env": "toolbox"}
         b64 = base64.b64encode(content.encode()).decode()

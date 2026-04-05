@@ -46,6 +46,8 @@ class SessionEngine:
         self._prediction_store = None      # PredictionStore（可选）
         self._prediction_extractor = None  # PredictionExtractor（可选）
         self._prediction_scheduler = None  # PredictionScheduler（可选，用于实时 overdue check）
+        self._dream_consolidator = None    # DreamConsolidator（可选）
+        self.skip_memory = False           # eval 模式：跳过后处理写入
 
     def inject_components(
         self,
@@ -60,6 +62,7 @@ class SessionEngine:
         prediction_store=None,
         prediction_extractor=None,
         prediction_scheduler=None,
+        dream_consolidator=None,
     ) -> None:
         """
         注入已有组件实例（由 native_agent 调用，避免重复初始化）
@@ -75,6 +78,7 @@ class SessionEngine:
         self._prediction_store = prediction_store
         self._prediction_extractor = prediction_extractor
         self._prediction_scheduler = prediction_scheduler
+        self._dream_consolidator = dream_consolidator
 
     async def prepare_session(
         self,
@@ -199,6 +203,14 @@ class SessionEngine:
                 )
             )
 
+        # 异步 Dream 整合检查（不阻塞当前请求）
+        if self._dream_consolidator and self._dream_consolidator.should_run(user_id):
+            import asyncio
+            instance_id = getattr(self._config, "instance_id", "default")
+            asyncio.ensure_future(
+                self._dream_consolidator.run(user_id=user_id, instance_id=instance_id)
+            )
+
         return ctx
 
     def start_episode(self, query: str) -> None:
@@ -242,7 +254,13 @@ class SessionEngine:
         2. 提取经验
         3. 完成 episode → 触发知识蒸馏/反思
         4. 检查是否需要摘要压缩
+
+        skip_memory=True 时（eval 模式）：跳过所有后处理写入，避免污染知识库和抢占 SQLite 锁
         """
+        if self.skip_memory:
+            logger.info(f"[SessionEngine] skip_memory=True, skipping finalize for session={session_id}")
+            return
+
         # 1+3. 并行执行：保存对话历史 + MemoryOS 更新
         # 注意：episode_tracker.finish() 已删除（方法名错误，蒸馏职责由 Stop hook 的 knowledge_guard 负责）
         import asyncio as _asyncio
@@ -290,6 +308,10 @@ class SessionEngine:
                     assistant_text=assistant_text,
                 )
             )
+
+        # Dream 计数器累加（每次 session 完成 +1）
+        if self._dream_consolidator:
+            self._dream_consolidator.on_session_complete(user_id)
 
     async def learn_from_feedback(
         self,

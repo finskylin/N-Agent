@@ -10,7 +10,7 @@ Document Reader Skill
   3. 钉钉附件 (dingtalk_download_code + dingtalk_robot_code)
 
 图片识别策略：
-  - 优先使用视觉大模型（VL1 → VL2 → VL3，circuit-breaker failover）
+  - 优先使用视觉大模型（VL1 → VL2 → VL3 → VL4，circuit-breaker failover）
   - 所有视觉模型熔断时降级到 pytesseract OCR
   - 熔断阈值：连续失败 >= LLM_FAILOVER_THRESHOLD_VL 次，冷却 LLM_FAILOVER_COOLDOWN_VL 秒后自动恢复
 """
@@ -94,7 +94,7 @@ class _VisionEndpoint:
 
 
 class VisionModelPool:
-    """进程级单例，管理 VL1/VL2/VL3 三个视觉端点的 failover。"""
+    """进程级单例，管理 VL1/VL2/VL3/VL4 视觉端点的 failover。"""
     _instance: Optional["VisionModelPool"] = None
     _init_lock = threading.Lock()
 
@@ -110,7 +110,7 @@ class VisionModelPool:
         default_threshold = int(os.getenv("LLM_FAILOVER_THRESHOLD_VL", "3"))
         default_cooldown = int(os.getenv("LLM_FAILOVER_COOLDOWN_VL", "300"))
         self._endpoints: List[_VisionEndpoint] = []
-        for suffix, name in [("_VL", "VL1"), ("_VL2", "VL2"), ("_VL3", "VL3")]:
+        for suffix, name in [("_VL", "VL1"), ("_VL2", "VL2"), ("_VL3", "VL3"), ("_VL4", "VL4")]:
             ep = _VisionEndpoint(
                 name=name,
                 base_url=os.getenv(f"ANTHROPIC_BASE_URL{suffix}", ""),
@@ -368,7 +368,7 @@ async def _parse_xlsx(file_path: str, max_chars: int) -> Dict[str, Any]:
 
 
 async def _parse_image(file_path: str, max_chars: int) -> Dict[str, Any]:
-    """视觉模型优先（VL1→VL2→VL3），全部熔断时降级到 pytesseract OCR。"""
+    """视觉模型优先（VL1→VL2→VL3→VL4），全部熔断时降级到 pytesseract OCR。"""
     pool = VisionModelPool.get()
 
     if not pool.all_demoted():

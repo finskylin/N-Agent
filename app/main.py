@@ -37,6 +37,7 @@ from app.api.config_admin import router as config_admin_router
 from app.api.knowledge import router as knowledge_router
 from app.api.tile_proxy import router as tile_proxy_router
 from app.api.tasks import router as tasks_router
+from app.api.eval import router as eval_router
 from app.channels.feishu.webhook import router as feishu_router
 
 # 配置日志
@@ -430,20 +431,74 @@ async def init_systems():
                         return f"prediction_incremental error: {_pe}"
 
                 if _cb.get("type") == "skill_evolution":
+                    # 5am Cron: SkillEvolver + 分步评测（Baseline → Post-Knowledge + 自动回退）
+                    _results = []
+                    _user_id = _cb.get("user_id", 1)
+                    _instance_id = _cb.get("instance_id", "")
+
+                    # Step 1: SkillEvolver（原有逻辑不变）
                     try:
                         from app.agent.v4.native_agent import V4NativeAgent
                         _evolver = V4NativeAgent.get_skill_evolver()
                         if _evolver:
-                            result = await _evolver.run_evolution_cycle(
-                                user_id=_cb.get("user_id", 1),
-                                instance_id=_cb.get("instance_id", ""),
+                            evolved = await _evolver.run_evolution_cycle(
+                                user_id=_user_id, instance_id=_instance_id,
                             )
-                            return f"skill_evolution done: evolved={result}"
+                            _results.append(f"skill_evolution: evolved={evolved}")
                         else:
-                            return "skill_evolution skipped: evolver not initialized"
+                            _results.append("skill_evolution: skipped (not initialized)")
                     except Exception as _pe:
                         logger.warning(f"[CronService] skill_evolution failed: {_pe}")
-                        return f"skill_evolution error: {_pe}"
+                        _results.append(f"skill_evolution: error={_pe}")
+
+                    # Step 2: 分步评测（Baseline → Post-Knowledge → 自动回退）
+                    try:
+                        from app.eval.runner import EvalRunner
+                        from pathlib import Path
+
+                        _results_dir = str(Path(__file__).parent / "data" / "eval" / "results")
+                        _agent_base_url = os.getenv(
+                            "EVAL_AGENT_BASE_URL",
+                            f"http://localhost:{os.getenv('PORT', '8000')}",
+                        )
+                        _eval_runner = EvalRunner(
+                            agent_base_url=_agent_base_url,
+                            results_dir=_results_dir,
+                        )
+
+                        # 获取 knowledge_store（用于批次标记和回退）
+                        _knowledge_store = None
+                        try:
+                            from app.agent.v4.native_agent import V4NativeAgent
+                            _knowledge_store = V4NativeAgent.get_knowledge_store()
+                        except Exception:
+                            pass
+
+                        _report = await _eval_runner.run_stepwise(
+                            user_id=_user_id,
+                            question_set="general",
+                            knowledge_store=_knowledge_store,
+                            instance_id=_instance_id,
+                            rollback_threshold=float(os.getenv("EVAL_ROLLBACK_THRESHOLD", "-0.5")),
+                        )
+                        _results.append(
+                            f"stepwise_eval: avg={_report.avg_total_score:.2f}, "
+                            f"rollbacks={len(_report.rollbacks or [])}, "
+                            f"run_id={_report.run_id}"
+                        )
+                        if _report.rollbacks:
+                            for _rb in _report.rollbacks:
+                                logger.warning(
+                                    f"[CronService] Knowledge rollback: batch={_rb.get('batch_id')}, "
+                                    f"units={_rb.get('units_rolled_back')}, reason={_rb.get('reason')}"
+                                )
+                    except Exception as _ee:
+                        logger.warning(f"[CronService] stepwise_eval failed: {_ee}")
+                        _results.append(f"stepwise_eval: error={_ee}")
+
+                    _summary = " | ".join(_results)
+                    logger.info(f"[CronService] Nightly evolution complete: {_summary}")
+                    return f"nightly_evolution done: {_summary}"
 
                 # 默认：走 Agent 问答流程
                 request = V4CronExecuteRequest(
@@ -738,6 +793,7 @@ app.include_router(config_admin_router)
 app.include_router(knowledge_router)
 app.include_router(tile_proxy_router)
 app.include_router(tasks_router)
+app.include_router(eval_router, prefix="/api/v1")
 app.include_router(feishu_router)  # 飞书 Webhook 事件接收
 
 # 挂载组件 bundle 静态文件目录

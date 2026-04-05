@@ -14,6 +14,7 @@ benchmark before/after 验证 -> 通过才写入。
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -161,11 +162,7 @@ Skill 名称: {skill_name}
         )
 
         try:
-            import asyncio
-            text = await asyncio.wait_for(
-                self._llm_call(prompt, use_small_fast=False, max_tokens=1024, timeout=30.0),
-                timeout=35.0,
-            )
+            text = await self._llm_call(prompt, use_small_fast=False, max_tokens=1024, timeout=30.0)
         except Exception as e:
             logger.warning(f"[SkillEvolver] LLM patch generation failed: {e}")
             return None
@@ -195,11 +192,7 @@ Skill 名称: {skill_name}
                 expected_tool=expected,
             )
             try:
-                import asyncio
-                result = await asyncio.wait_for(
-                    self._llm_call(prompt, use_small_fast=True, max_tokens=10, timeout=10.0),
-                    timeout=12.0,
-                )
+                result = await self._llm_call(prompt, use_small_fast=True, max_tokens=10, timeout=10.0)
                 if "YES" in result.upper():
                     correct += 1
             except Exception:

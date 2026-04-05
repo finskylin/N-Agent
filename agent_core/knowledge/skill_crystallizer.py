@@ -92,11 +92,11 @@ class SkillCrystallizer:
             return None
 
         try:
-            timeout = self._config.get("llm_timeout_seconds", 20)
-            import asyncio
-            response = await asyncio.wait_for(
-                self._llm_call(prompt), timeout=timeout,
-            )
+            per_ep_timeout = self._config.get("llm_timeout_seconds", 30)
+            try:
+                response = await self._llm_call(prompt, timeout=per_ep_timeout)
+            except TypeError:
+                response = await self._llm_call(prompt)
 
             crystal = self._parse_evaluation(response, user_id, instance_id, episodes)
             if not crystal:

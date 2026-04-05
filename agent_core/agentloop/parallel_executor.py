@@ -23,9 +23,8 @@ from loguru import logger
 
 from .message_types import ToolCallRequest, ToolResult
 
-# 内置只读工具（硬编码，不依赖 SKILL.md 标记）
-# spawn_agent 虽非只读，但子代理完全隔离，多个子代理并行执行是安全且高效的
-_BUILTIN_READONLY: frozenset = frozenset({"read_file", "grep", "spawn_agent"})
+# 内置只读工具硬编码兜底名单（注册表优先，此处作为后备）
+_BUILTIN_READONLY: frozenset = frozenset({"read_file", "grep", "glob", "spawn_agent"})
 
 
 class ParallelToolExecutor:
@@ -53,7 +52,17 @@ class ParallelToolExecutor:
         self._per_tool_timeout = per_tool_timeout
 
     def is_readonly(self, tool_name: str) -> bool:
-        """判断工具是否只读（内置名单 + SkillMetadata.readonly）"""
+        """判断工具是否只读（注册表 > SkillDiscovery > 硬编码名单）"""
+        # 优先从 BuiltinToolRegistry 查询（注册表 readonly 属性权威）
+        try:
+            registry = getattr(self._invoker, "_tool_registry", None)
+            if registry is not None:
+                builtin = registry.get(tool_name)
+                if builtin is not None:
+                    return builtin.readonly
+        except Exception:
+            pass
+        # 硬编码兜底
         if tool_name in _BUILTIN_READONLY:
             return True
         # 查 SkillDiscovery（支持 get / get_by_name 两种接口）

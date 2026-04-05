@@ -44,6 +44,17 @@ class SkillInvoker:
         self._subagent_store = None   # 由外部注入（native_agent.py）
         # 缓存工具定义（避免重复计算）
         self._tool_defs_cache: Optional[List[dict]] = None
+        # 内置工具注册表（懒加载避免循环导入）
+        self._tool_registry = self._build_tool_registry()
+
+    @staticmethod
+    def _build_tool_registry():
+        """构建内置工具注册表（函数内导入避免循环 import）"""
+        from agent_core.tools import BuiltinToolRegistry, get_default_tools
+        registry = BuiltinToolRegistry()
+        for tool in get_default_tools():
+            registry.register(tool)
+        return registry
 
     # ──────────────────────────── 工具定义 ────────────────────────────
 
@@ -113,69 +124,9 @@ class SkillInvoker:
             return None
 
     def get_builtin_tool_definitions(self) -> List[dict]:
-        """获取内置工具（Bash/Read/Grep/Glob/SpawnAgent）的定义"""
-        defs = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "bash",
-                    "description": "执行 bash 命令（python3、curl、shell 脚本等）",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "command": {
-                                "type": "string",
-                                "description": "要执行的 bash 命令",
-                            },
-                            "timeout": {
-                                "type": "integer",
-                                "description": "超时时间（秒），默认 120",
-                                "default": 120,
-                            },
-                        },
-                        "required": ["command"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "read_file",
-                    "description": "读取文件内容",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "file_path": {
-                                "type": "string",
-                                "description": "文件路径",
-                            },
-                        },
-                        "required": ["file_path"],
-                    },
-                },
-            },
-            {
-                "type": "function",
-                "function": {
-                    "name": "grep",
-                    "description": "在文件中搜索内容",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "pattern": {
-                                "type": "string",
-                                "description": "搜索模式（正则表达式）",
-                            },
-                            "path": {
-                                "type": "string",
-                                "description": "搜索路径",
-                            },
-                        },
-                        "required": ["pattern"],
-                    },
-                },
-            },
-        ]
+        """获取内置工具定义（从注册表生成）"""
+        # 基础工具从注册表取
+        defs = self._tool_registry.to_api_schemas()
         # Phase 6: spawn_agent + query_subagent（仅在子代理功能启用时注册）
         if self._subagent_executor and getattr(self._subagent_executor, "_enabled", False):
             defs.append({
@@ -187,6 +138,8 @@ class SkillInvoker:
                         "可进行多轮 LLM 推理和工具调用，执行完毕返回文本结果。"
                         "适用于：需要隔离执行的子任务、任务边界清晰且可并行的场景。"
                         "子代理过程事件会实时透传给当前对话流。"
+                        "重要：软件开发、代码编写、系统部署、续接开发（'继续开发'/'不要停'/'直到完成'）"
+                        "等预计超过15分钟的任务，必须传 background=true，否则会阻塞主流程超时。"
                     ),
                     "parameters": {
                         "type": "object",
@@ -212,6 +165,16 @@ class SkillInvoker:
                                     "general_expert",
                                     "software_expert",
                                 ],
+                            },
+                            "background": {
+                                "type": "boolean",
+                                "description": (
+                                    "true=后台异步执行（立即返回 task_id，子代理在后台独立运行最长5小时，完成后自动通知用户）。"
+                                    "false=同步等待（父代理阻塞直到子代理完成，仅适合3轮以内的快速任务）。"
+                                    "以下场景必须设为 true：软件开发、代码编写、系统部署、"
+                                    "续接开发（'继续开发'/'不要停'/'直到完成'/'接着做'）、"
+                                    "预计超过15分钟的任务。"
+                                ),
                             },
                         },
                         "required": ["task"],
@@ -361,26 +324,10 @@ class SkillInvoker:
                     duration_ms=time.monotonic() * 1000 - start_ms,
                 )
 
-        # 内置工具
-        if skill_name == "bash":
-            result = await self.invoke_bash(
-                command=arguments.get("command", ""),
-                timeout=arguments.get("timeout", 120),
-            )
-            result.tool_call_id = tool_call_id
-            return result
-
-        if skill_name == "read_file":
-            result = await self.invoke_read(arguments.get("file_path", ""))
-            result.tool_call_id = tool_call_id
-            return result
-
-        if skill_name == "grep":
-            result = await self.invoke_grep(
-                pattern=arguments.get("pattern", ""),
-                path=arguments.get("path", "."),
-            )
-            result.tool_call_id = tool_call_id
+        # 内置工具注册表路由（bash/read_file/grep/write_file/edit_file/glob）
+        builtin = self._tool_registry.get(skill_name)
+        if builtin is not None:
+            result = await builtin.execute(arguments, tool_call_id=tool_call_id, sandbox=self._sandbox)
             return result
 
         # 技能执行

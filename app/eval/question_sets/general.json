@@ -1,0 +1,316 @@
+{
+  "name": "通用Agent能力评测集 v1",
+  "version": "1.0",
+  "description": "评测Agent的工具调用能力和回答质量，覆盖数据查询、综合分析、研究报告三类场景",
+  "questions": [
+    {
+      "id": "q001",
+      "category": "数据查询",
+      "difficulty": "easy",
+      "question": "帮我查一下贵州茅台（600519）最新的股价和基本面信息",
+      "expected_tools": ["stock_resolver", "financial_report"],
+      "required_tools": ["financial_report"],
+      "judge_focus": [
+        "是否给出了贵州茅台的具体股价数字",
+        "基本面信息是否包含营收、净利润等关键财务指标",
+        "数据是否有明确来源"
+      ],
+      "hallucination_check": {
+        "enabled": true,
+        "numeric_fields": ["股价", "营收", "净利润", "市值"]
+      }
+    },
+    {
+      "id": "q002",
+      "category": "数据查询",
+      "difficulty": "easy",
+      "question": "查一下招商银行（600036）的财务报表核心指标，包括ROE、净利润增速和不良贷款率",
+      "expected_tools": ["stock_resolver", "financial_report"],
+      "required_tools": ["financial_report"],
+      "judge_focus": [
+        "ROE数值是否具体",
+        "净利润增速是否有数字",
+        "不良贷款率是否提及",
+        "财务数据是否有明确来源"
+      ],
+      "hallucination_check": {
+        "enabled": true,
+        "numeric_fields": ["ROE", "净利润增速", "不良贷款率"]
+      }
+    },
+    {
+      "id": "q003",
+      "category": "数据查询",
+      "difficulty": "easy",
+      "question": "查看比亚迪（002594）的技术面信号，包括MACD、RSI和均线情况",
+      "expected_tools": ["stock_resolver", "technical_indicators"],
+      "required_tools": ["technical_indicators"],
+      "judge_focus": [
+        "是否给出MACD的具体数值或信号",
+        "RSI数值是否明确",
+        "均线情况是否描述清楚",
+        "技术信号综合结论是否有依据"
+      ],
+      "hallucination_check": {
+        "enabled": true,
+        "numeric_fields": ["MACD", "RSI", "均线"]
+      }
+    },
+    {
+      "id": "q004",
+      "category": "数据查询",
+      "difficulty": "easy",
+      "question": "查一下中芯国际（688981）的资金流向情况，近期主力资金是流入还是流出？",
+      "expected_tools": ["stock_resolver", "fund_flow"],
+      "required_tools": ["fund_flow"],
+      "judge_focus": [
+        "是否给出了具体的资金流入/流出金额",
+        "主力资金方向是否明确",
+        "是否有时间维度的说明（近几日）"
+      ],
+      "hallucination_check": {
+        "enabled": true,
+        "numeric_fields": ["资金流入", "资金流出", "净流入", "净流出"]
+      }
+    },
+    {
+      "id": "q005",
+      "category": "数据查询",
+      "difficulty": "easy",
+      "question": "帮我看看宁德时代（300750）的估值情况，PE和PB分别是多少，是否处于历史高位？",
+      "expected_tools": ["stock_resolver", "valuation_analysis"],
+      "required_tools": ["valuation_analysis"],
+      "judge_focus": [
+        "PE数值是否具体",
+        "PB数值是否具体",
+        "是否与历史分位或行业均值对比",
+        "结论是否有数据支撑"
+      ],
+      "hallucination_check": {
+        "enabled": true,
+        "numeric_fields": ["PE", "PB", "历史分位", "分位数"]
+      }
+    },
+    {
+      "id": "q006",
+      "category": "综合分析",
+      "difficulty": "medium",
+      "question": "从财务面和技术面两个维度分析贵州茅台（600519）的当前投资价值",
+      "expected_tools": ["stock_resolver", "financial_report", "technical_indicators", "valuation_analysis"],
+      "required_tools": ["financial_report", "technical_indicators"],
+      "judge_focus": [
+        "财务面分析是否包含真实数据",
+        "技术面分析是否包含具体指标数值",
+        "两个维度是否都覆盖",
+        "综合结论是否基于上述分析"
+      ],
+      "hallucination_check": {
+        "enabled": true,
+        "numeric_fields": ["营收", "净利润", "ROE", "PE", "MACD", "RSI"]
+      }
+    },
+    {
+      "id": "q007",
+      "category": "综合分析",
+      "difficulty": "medium",
+      "question": "从估值和资金面分析宁德时代（300750）现在是否值得买入？",
+      "expected_tools": ["stock_resolver", "valuation_analysis", "fund_flow"],
+      "required_tools": ["valuation_analysis", "fund_flow"],
+      "judge_focus": [
+        "估值分析是否有具体数字",
+        "资金面分析是否有流向数据",
+        "买入建议是否综合两个维度",
+        "是否有明确的结论和逻辑"
+      ],
+      "hallucination_check": {
+        "enabled": true,
+        "numeric_fields": ["PE", "PB", "资金净流入", "资金净流出"]
+      }
+    },
+    {
+      "id": "q008",
+      "category": "综合分析",
+      "difficulty": "medium",
+      "question": "分析当前新能源汽车行业的整体投资环境，重点看行业景气度和龙头股表现",
+      "expected_tools": ["stock_resolver", "financial_report", "technical_indicators"],
+      "required_tools": ["financial_report"],
+      "judge_focus": [
+        "行业分析是否有具体数据支撑",
+        "是否提到具体的行业龙头企业",
+        "景气度判断是否有依据",
+        "结论是否综合行业和个股维度"
+      ],
+      "hallucination_check": {
+        "enabled": true,
+        "numeric_fields": ["增速", "市场规模", "渗透率"]
+      }
+    },
+    {
+      "id": "q009",
+      "category": "综合分析",
+      "difficulty": "medium",
+      "question": "分析一下当前A股大盘的市场状况，沪深300目前的位置和市场情绪如何？",
+      "expected_tools": ["market_overview", "technical_indicators"],
+      "required_tools": ["market_overview"],
+      "judge_focus": [
+        "是否给出沪深300的具体点位",
+        "市场情绪判断是否有依据",
+        "是否分析了大盘趋势",
+        "结论是否有数据支撑"
+      ],
+      "hallucination_check": {
+        "enabled": true,
+        "numeric_fields": ["点位", "涨跌幅", "成交量", "换手率"]
+      }
+    },
+    {
+      "id": "q010",
+      "category": "综合分析",
+      "difficulty": "hard",
+      "question": "对招商银行（600036）进行综合评级分析，从财务质量、成长性、估值三个维度给出评级",
+      "expected_tools": ["stock_resolver", "financial_report", "valuation_analysis", "comprehensive_rating"],
+      "required_tools": ["financial_report", "valuation_analysis"],
+      "judge_focus": [
+        "三个维度是否都有数据支撑",
+        "财务质量分析是否包含ROE、净利润等关键指标",
+        "成长性分析是否有增速数据",
+        "估值是否有PE/PB数值",
+        "最终评级是否综合三个维度"
+      ],
+      "hallucination_check": {
+        "enabled": true,
+        "numeric_fields": ["ROE", "净利润", "PE", "PB", "增速"]
+      }
+    },
+    {
+      "id": "q011",
+      "category": "综合分析",
+      "difficulty": "hard",
+      "question": "分析近期北向资金的动向，北向资金重点买入和卖出了哪些行业和个股？",
+      "expected_tools": ["north_bound_capital", "fund_flow"],
+      "required_tools": ["north_bound_capital"],
+      "judge_focus": [
+        "是否给出具体的北向资金流入/流出金额",
+        "是否提到具体的行业或个股",
+        "流向趋势分析是否有时间维度",
+        "对市场的影响分析是否有逻辑"
+      ],
+      "hallucination_check": {
+        "enabled": true,
+        "numeric_fields": ["亿元", "净买入", "净卖出", "持仓比"]
+      }
+    },
+    {
+      "id": "q012",
+      "category": "综合分析",
+      "difficulty": "hard",
+      "question": "分析中芯国际（688981）的主要投资风险点，包括行业风险、竞争风险和估值风险",
+      "expected_tools": ["stock_resolver", "financial_report", "valuation_analysis", "technical_indicators"],
+      "required_tools": ["financial_report", "valuation_analysis"],
+      "judge_focus": [
+        "是否覆盖了多个风险维度",
+        "每个风险点是否有具体数据支撑",
+        "行业风险分析是否具体",
+        "估值风险是否有PE/PB数据",
+        "风险结论是否有逻辑"
+      ],
+      "hallucination_check": {
+        "enabled": true,
+        "numeric_fields": ["PE", "PB", "营收", "利润率"]
+      }
+    },
+    {
+      "id": "q013",
+      "category": "综合分析",
+      "difficulty": "hard",
+      "question": "比较贵州茅台（600519）和招商银行（600036）的投资价值，哪个更值得配置？",
+      "expected_tools": ["stock_resolver", "financial_report", "valuation_analysis", "spawn_agent"],
+      "required_tools": ["financial_report", "valuation_analysis"],
+      "judge_focus": [
+        "是否对两只股票都进行了分析",
+        "对比是否有具体数据",
+        "最终推荐是否基于数据对比",
+        "是否考虑了不同的投资风格或需求"
+      ],
+      "hallucination_check": {
+        "enabled": true,
+        "numeric_fields": ["PE", "PB", "ROE", "净利润"]
+      }
+    },
+    {
+      "id": "q014",
+      "category": "研究报告",
+      "difficulty": "hard",
+      "question": "帮我生成一份比亚迪（002594）的完整股票分析报告，包括公司概况、财务分析、技术面分析、估值分析和投资建议",
+      "expected_tools": ["stock_resolver", "financial_report", "technical_indicators", "valuation_analysis", "report_generator"],
+      "required_tools": ["financial_report", "technical_indicators", "valuation_analysis"],
+      "judge_focus": [
+        "报告结构是否完整（五个章节）",
+        "每个章节是否有具体数据",
+        "财务数据是否真实引用",
+        "投资建议是否基于前面的分析",
+        "报告整体逻辑是否连贯"
+      ],
+      "hallucination_check": {
+        "enabled": true,
+        "numeric_fields": ["营收", "净利润", "PE", "PB", "RSI", "MACD"]
+      }
+    },
+    {
+      "id": "q015",
+      "category": "研究报告",
+      "difficulty": "hard",
+      "question": "生成一份半导体行业研究简报，分析行业现状、主要驱动因素和值得关注的A股标的",
+      "expected_tools": ["financial_report", "market_overview", "technical_indicators"],
+      "required_tools": ["financial_report"],
+      "judge_focus": [
+        "行业分析是否有数据支撑",
+        "驱动因素分析是否具体",
+        "个股推荐是否有逻辑",
+        "是否提到具体的企业和数据"
+      ],
+      "hallucination_check": {
+        "enabled": true,
+        "numeric_fields": ["市场规模", "增速", "营收", "利润率"]
+      }
+    },
+    {
+      "id": "q016",
+      "category": "研究报告",
+      "difficulty": "hard",
+      "question": "分析美联储加息对A股市场的影响，重点看对北向资金流向和科技板块的传导效应",
+      "expected_tools": ["market_overview", "north_bound_capital", "fund_flow"],
+      "required_tools": ["market_overview"],
+      "judge_focus": [
+        "分析框架是否清晰",
+        "是否有具体的数据说明传导机制",
+        "北向资金的影响是否有数据支撑",
+        "对科技板块的影响分析是否具体",
+        "结论是否有逻辑推导"
+      ],
+      "hallucination_check": {
+        "enabled": true,
+        "numeric_fields": ["加息幅度", "北向资金", "净流出", "跌幅"]
+      }
+    },
+    {
+      "id": "q017",
+      "category": "研究报告",
+      "difficulty": "hard",
+      "question": "基于财务、技术、估值和资金面四个维度，给出宁德时代（300750）未来一个月的操作建议",
+      "expected_tools": ["stock_resolver", "financial_report", "technical_indicators", "valuation_analysis", "fund_flow"],
+      "required_tools": ["financial_report", "technical_indicators", "valuation_analysis"],
+      "judge_focus": [
+        "四个维度是否都有数据分析",
+        "操作建议是否具体（买入/持有/卖出 + 目标价位）",
+        "建议是否基于前面的分析",
+        "风险提示是否完整",
+        "整体逻辑是否连贯"
+      ],
+      "hallucination_check": {
+        "enabled": true,
+        "numeric_fields": ["营收", "PE", "PB", "RSI", "资金净流入", "目标价"]
+      }
+    }
+  ]
+}

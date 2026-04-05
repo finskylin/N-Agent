@@ -107,7 +107,7 @@ class V4Config:
     session_storage_backend: str = "sqlite"
     sqlite_db_path_template: str = "app/data/sessions/{instance_id}/memory.db"
     sqlite_wal_mode: bool = True
-    sqlite_busy_timeout_ms: int = 5000
+    sqlite_busy_timeout_ms: int = 30000     # 30秒，支持高并发写入场景
 
     # === 上下文窗口管控配置 ===
     context_window_override: int = 0
@@ -160,8 +160,8 @@ class V4Config:
 
 
     # === AgentLoop 停止条件 ===
-    max_iterations: int = 30               # 最大循环次数
-    max_timeout_seconds: int = 720         # 最大执行时间（秒），默认 12 分钟
+    max_iterations: int = 100              # 最大循环次数
+    max_timeout_seconds: int = 3600        # 最大执行时间（秒），默认 60 分钟
     max_tokens_per_turn: int = 16384       # 每轮 LLM 最大输出 token 数
     loop_max_truncation_retry: int = 2     # max_tokens 截断续写上限
     loop_treat_unknown_stop_as_complete: bool = True  # 未知 stop_reason 按完成处理
@@ -182,7 +182,23 @@ class V4Config:
     # === Phase 6: SubAgent 子代理配置 ===
     subagent_enabled: bool = True
     subagent_max_depth: int = 3
-    subagent_max_iterations: int = 10
+    subagent_max_iterations: int = 100
+    bg_subagent_max_iterations: int = 0              # 0 = 不限制迭代次数
+    bg_subagent_max_timeout_seconds: int = 18000   # 异步后台子代理超时，默认 5 小时
+
+    # === AutoDream: 周期性深度记忆整合配置 ===
+    dream_enabled: bool = True                    # 是否启用 DreamConsolidator
+    dream_interval_hours: int = 24               # 定时触发间隔（小时）
+    dream_session_threshold: int = 50            # 会话数触发阈值
+    dream_min_episodes: int = 5                  # 深度反思最少 Episode 数
+    dream_superseded_keep_days: int = 7          # superseded 知识保留天数
+    dream_stale_min_utility: float = 0.2         # 低效用阈值
+    dream_stale_max_age_days: int = 90           # 低效用知识最大保留天数
+    dream_merge_similarity_threshold: float = 0.7  # 知识合并 Jaccard 阈值
+    dream_merge_min_group_size: int = 3          # 触发合并的最小组大小
+    dream_isolated_node_max_age_days: int = 30   # 孤立图谱节点最大保留天数
+    dream_cold_max_age_days: int = 30            # MTM 冷页面最大保留天数
+    dream_llm_timeout_seconds: int = 60          # Dream LLM 调用超时
 
     # === Ring 2: Skill 进化 (DGM Patch) 配置 ===
     skill_evolution_enabled: bool = False        # 默认禁用，需显式开启
@@ -195,6 +211,20 @@ class V4Config:
     capability_gap_detection_enabled: bool = True   # 默认启用检测
     capability_gap_trigger_threshold: int = 3       # 累积 3 次失败触发进化任务
     capability_gap_cooldown_hours: int = 24         # 同一工具 24h 内不重复触发
+
+    # === Token 优化配置 ===
+    # 工具结果 LLM 总结
+    tool_result_summarize_enabled: bool = True
+    tool_result_summarize_threshold: int = 20000   # 字符数，超过触发 LLM 总结
+    tool_result_summarize_hard_limit: int = 50000  # 总结失败时的硬截断上限
+    tool_result_summarize_timeout: float = 60.0
+
+    # 单条消息上限
+    context_single_message_max_chars: int = 30000
+
+    # 分级截断 truncatable_to
+    context_tool_result_truncatable_chars: int = 300    # MEDIUM 超预算时截到此长度
+    context_tool_error_truncatable_chars: int = 1000    # HIGH 错误消息截到此长度
 
     # === LLM KV Cache 配置 ===
     llm_cache_control_enabled: bool = False  # 是否启用 Anthropic cache_control blocks
@@ -269,7 +299,7 @@ class V4Config:
             session_storage_backend=os.getenv("V4_SESSION_STORAGE_BACKEND", "sqlite"),
             sqlite_db_path_template=os.getenv("V4_SQLITE_DB_PATH_TEMPLATE", "app/data/sessions/{instance_id}/memory.db"),
             sqlite_wal_mode=_to_bool(os.getenv("V4_SQLITE_WAL_MODE", "true")),
-            sqlite_busy_timeout_ms=int(os.getenv("V4_SQLITE_BUSY_TIMEOUT_MS", "5000")),
+            sqlite_busy_timeout_ms=int(os.getenv("V4_SQLITE_BUSY_TIMEOUT_MS", "30000")),
             context_window_override=int(os.getenv("V4_CONTEXT_WINDOW_OVERRIDE", "0")),
             context_budget_session_file=float(os.getenv("V4_CONTEXT_BUDGET_SESSION_FILE", "0.0")),
             context_budget_system_prompt=float(os.getenv("V4_CONTEXT_BUDGET_SYSTEM_PROMPT", "0.0")),
@@ -308,8 +338,8 @@ class V4Config:
             prediction_extraction_enabled=_to_bool(os.getenv("PREDICTION_EXTRACTION_ENABLED", "true")),
             prediction_staleness_days=int(os.getenv("PREDICTION_STALENESS_DAYS", "30")),
             prediction_verify_timeout=int(os.getenv("PREDICTION_VERIFY_TIMEOUT", "30")),
-            max_iterations=int(os.getenv("V4_MAX_ITERATIONS", "30")),
-            max_timeout_seconds=int(os.getenv("V4_MAX_TIMEOUT_SECONDS", "720")),
+            max_iterations=int(os.getenv("V4_MAX_ITERATIONS", "100")),
+            max_timeout_seconds=int(os.getenv("V4_MAX_TIMEOUT_SECONDS", "3600")),
             max_tokens_per_turn=int(os.getenv("V4_MAX_TOKENS_PER_TURN", "16384")),
             loop_max_truncation_retry=int(os.getenv("V4_LOOP_MAX_TRUNCATION_RETRY", "2")),
             loop_treat_unknown_stop_as_complete=_to_bool(os.getenv("V4_LOOP_TREAT_UNKNOWN_STOP_AS_COMPLETE", "true")),
@@ -322,7 +352,9 @@ class V4Config:
             permission_guard_enabled=_to_bool(os.getenv("V4_PERMISSION_GUARD_ENABLED", "false")),
             subagent_enabled=_to_bool(os.getenv("V4_SUBAGENT_ENABLED", "true")),
             subagent_max_depth=int(os.getenv("V4_SUBAGENT_MAX_DEPTH", "3")),
-            subagent_max_iterations=int(os.getenv("V4_SUBAGENT_MAX_ITERATIONS", "10")),
+            subagent_max_iterations=int(os.getenv("V4_SUBAGENT_MAX_ITERATIONS", "100")),
+            bg_subagent_max_iterations=int(os.getenv("V4_BG_SUBAGENT_MAX_ITERATIONS", "0")),
+            bg_subagent_max_timeout_seconds=int(os.getenv("V4_BG_SUBAGENT_MAX_TIMEOUT_SECONDS", "18000")),
             skill_evolution_enabled=_to_bool(os.getenv("SKILL_EVOLUTION_ENABLED", "false")),
             skill_evolution_error_threshold=float(os.getenv("SKILL_EVOLUTION_ERROR_THRESHOLD", "0.3")),
             skill_evolution_min_calls=int(os.getenv("SKILL_EVOLUTION_MIN_CALLS", "5")),
@@ -469,7 +501,9 @@ class V4Config:
             permission_guard_enabled=_gb("permission_guard_enabled", False),
             subagent_enabled=_gb("subagent_enabled", True),
             subagent_max_depth=_gi("subagent_max_depth", 3),
-            subagent_max_iterations=_gi("subagent_max_iterations", 10),
+            subagent_max_iterations=_gi("subagent_max_iterations", 100),
+            bg_subagent_max_iterations=_gi("bg_subagent_max_iterations", 100),
+            bg_subagent_max_timeout_seconds=_gi("bg_subagent_max_timeout_seconds", 3600),
             skill_evolution_enabled=_gb("skill_evolution_enabled", False),
             skill_evolution_error_threshold=_gf("skill_evolution_error_threshold", 0.3),
             skill_evolution_min_calls=_gi("skill_evolution_min_calls", 5),

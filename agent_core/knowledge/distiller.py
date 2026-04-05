@@ -4,6 +4,7 @@ Knowledge Distiller — 知识蒸馏器
 从 Episode 执行轨迹中提取可复用的结构化知识。
 含冲突检测: 新知识与旧知识矛盾时，旧知识标记 superseded_by。
 """
+import asyncio
 import json
 import time
 from pathlib import Path
@@ -101,12 +102,13 @@ class KnowledgeDistiller:
             return []
 
         try:
-            timeout = self._config.get("llm_timeout_seconds", 15)
-            import asyncio
-            response = await asyncio.wait_for(
-                self._llm_call(prompt),
-                timeout=timeout,
-            )
+            # 使用 per-endpoint timeout 直接传入 _llm_call（call_llm 内部已实现 failover/race），
+            # 不再用外层 asyncio.wait_for 截断整个 failover 链路
+            per_ep_timeout = self._config.get("llm_timeout_seconds", 30)
+            try:
+                response = await self._llm_call(prompt, timeout=per_ep_timeout)
+            except TypeError:
+                response = await self._llm_call(prompt)
 
             # 解析 JSON 输出（同时提取 triples）
             units, units_with_triples = self._parse_llm_output(
@@ -122,7 +124,9 @@ class KnowledgeDistiller:
             # 保存非冲突的新知识
             for unit in units:
                 if not unit.supersedes:  # 未被冲突处理过的，直接保存
-                    await self._store.save_knowledge(unit, user_id, instance_id)
+                    await self._store.save_knowledge(
+                        unit, user_id, instance_id, source_type="distill"
+                    )
 
             # 写入知识图谱（opt-in，graph_distiller=None 时跳过）
             if self._graph_distiller and units_with_triples:
@@ -136,11 +140,6 @@ class KnowledgeDistiller:
             logger.info(f"[Distiller] Distilled {len(units)} knowledge units from episode {episode.episode_id}")
             return units
 
-        except asyncio.TimeoutError:
-            logger.warning(
-                f"[Distiller] Distill timed out after {timeout}s (llm_timeout_seconds={timeout})"
-            )
-            return []
         except Exception as e:
             logger.warning(f"[Distiller] Distill failed: {type(e).__name__}: {e}", exc_info=True)
             return []

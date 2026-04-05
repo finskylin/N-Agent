@@ -156,17 +156,19 @@ class ReflectionEngine:
             return []
 
         try:
-            timeout = self._config.get("llm_timeout_seconds", 30)
-            import asyncio
-            response = await asyncio.wait_for(
-                self._llm_call(prompt), timeout=timeout,
-            )
+            per_ep_timeout = self._config.get("llm_timeout_seconds", 30)
+            try:
+                response = await self._llm_call(prompt, timeout=per_ep_timeout)
+            except TypeError:
+                response = await self._llm_call(prompt)
 
             units, gaps = self._parse_reflection_output(response, user_id, instance_id)
 
             # 保存反思知识
             for unit in units:
-                await self._store.save_knowledge(unit, user_id, instance_id)
+                await self._store.save_knowledge(
+                    unit, user_id, instance_id, source_type="reflect"
+                )
 
             # 自动创建认知快照
             if self._config.get("auto_snapshot", True) and self._temporal_manager:

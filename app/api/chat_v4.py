@@ -104,6 +104,8 @@ class V4ChatRequest(BaseModel):
     attached_files: List[Dict[str, str]] = []  # [{"file_id": "xxx", "file_path": "...", "file_name": "报告.pdf", "minio_url": "..."}]
     # 场景类型（可选，用户指定或 LLM 推断）
     scene_type: Optional[str] = None  # default | map | stock | intel
+    # eval 模式：跳过记忆/蒸馏/反思等后处理写入（仅 eval 评测时使用）
+    skip_memory: bool = False
 
 
 class V4ChatResponse(BaseModel):
@@ -264,6 +266,7 @@ async def v4_stream_message(fastapi_req: Request, request: V4ChatRequest):
                 force_skills=request.force_skills or [],
                 skill_params=request.skill_params or {},
                 scene_type=request.scene_type,
+                skip_memory=request.skip_memory,
             )
 
             # Langfuse: 创建 Trace（不可用时返回 NoOp，不影响后续逻辑）

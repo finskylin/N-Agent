@@ -143,10 +143,10 @@ class EvolutionTaskManager:
         )
 
         if gap_prompt:
-            import asyncio
-            gap_result = await asyncio.wait_for(
-                self._llm_call(gap_prompt), timeout=timeout,
-            )
+            try:
+                gap_result = await self._llm_call(gap_prompt, timeout=timeout)
+            except TypeError:
+                gap_result = await self._llm_call(gap_prompt)
             task.exploration_log.append({
                 "phase": "gap",
                 "result": gap_result[:500],
@@ -168,10 +168,10 @@ class EvolutionTaskManager:
 
         seek_result = ""
         if seek_prompt:
-            import asyncio
-            seek_result = await asyncio.wait_for(
-                self._llm_call(seek_prompt), timeout=timeout,
-            )
+            try:
+                seek_result = await self._llm_call(seek_prompt, timeout=timeout)
+            except TypeError:
+                seek_result = await self._llm_call(seek_prompt)
             task.exploration_log.append({
                 "phase": "seek",
                 "result": seek_result[:500],
@@ -191,10 +191,10 @@ class EvolutionTaskManager:
 
         new_units = []
         if synth_prompt:
-            import asyncio
-            synth_result = await asyncio.wait_for(
-                self._llm_call(synth_prompt), timeout=timeout,
-            )
+            try:
+                synth_result = await self._llm_call(synth_prompt, timeout=timeout)
+            except TypeError:
+                synth_result = await self._llm_call(synth_prompt)
             new_units = self._parse_synthesis(synth_result)
 
         # Phase 3.5: 判断是否需要创建新 Skill
@@ -268,8 +268,10 @@ class EvolutionTaskManager:
             f"仅回答 YES 或 NO。"
         )
         try:
-            import asyncio
-            result = await asyncio.wait_for(self._llm_call(prompt), timeout=15)
+            try:
+                result = await self._llm_call(prompt, timeout=30)
+            except TypeError:
+                result = await self._llm_call(prompt)
             return "YES" in result.upper()
         except Exception:
             return False

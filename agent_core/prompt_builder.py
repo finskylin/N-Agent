@@ -1044,7 +1044,8 @@ class PromptBuilder:
         phase0_topics: Optional[List[str]] = None,
         quality_focus: Optional[Dict[str, float]] = None,
         report_lang: str = "zh",
-    ) -> str:
+        as_blocks: bool = False,
+    ):
         """
         构建单 Client 架构的统一 System Prompt
 
@@ -1054,37 +1055,40 @@ class PromptBuilder:
         - 阶段 2：执行（调用工具，整合结果）
 
         report_lang: zh=中文, en=英文, auto=根据用户语言自适应
+        as_blocks: True 时返回带 cache_control 的 List[dict]，False 时返回 str
         """
-        parts = []
+        zone_a_parts = []
+        zone_b_parts = []
+        zone_c_parts = []
 
         # ─────────────────────────────────────────────────────────────────
         # Zone A: 全静态区 — 跨所有请求完全一致，KV Cache 高命中
         # ─────────────────────────────────────────────────────────────────
 
         # A1. 基础指令（身份 + 核心原则；{response_language_rule} 已按 lang 替换）
-        parts.append(self._get_base_prompt(report_lang=report_lang))
+        zone_a_parts.append(self._get_base_prompt(report_lang=report_lang))
 
         # A2. 问答工作流规则（附件处理、输出标记、可信度评估）
         workflow = _load("v4_agent_workflow")
         if workflow:
-            parts.append(workflow)
+            zone_a_parts.append(workflow)
 
         # A3. 搜索质量评估框架（永久注入，指导 quick_search/url_fetch 迭代决策）
         search_quality = _load("v4_search_quality_framework")
         if search_quality:
-            parts.append(f"\n{search_quality}")
+            zone_a_parts.append(f"\n{search_quality}")
 
         # A4. 输出格式 + 渲染模式控制
         # 7.1 即时确认回复已迁移到两阶段架构（Phase 1 _phase1_quick_respond）
         # v4_smart_ack 不再注入 system prompt
         format_section = self._format_output_instructions(output_format, render_mode)
         if format_section:
-            parts.append(format_section)
+            zone_a_parts.append(format_section)
 
         # A5. 行为指引（无条件注入，不再检查 experience）
         behavior = _load("v4_experience_behavior")
         if behavior:
-            parts.append(f"\n{behavior}")
+            zone_a_parts.append(f"\n{behavior}")
 
         # ─────────────────────────────────────────────────────────────────
         # Zone B: 半静态区 — 技能列表/知识库，天级更新
@@ -1097,12 +1101,12 @@ class PromptBuilder:
             phase0_topics=phase0_topics,
         )
         if skill_list_section:
-            parts.append(skill_list_section)
+            zone_b_parts.append(skill_list_section)
 
         # B2. 知识库上下文（从配置文件动态加载）
         knowledge_section = self._get_knowledge_context()
         if knowledge_section:
-            parts.append(knowledge_section)
+            zone_b_parts.append(knowledge_section)
 
         # ─────────────────────────────────────────────────────────────────
         # Zone C: 动态区 — 记忆/历史/覆盖指令，每次请求变化
@@ -1114,7 +1118,7 @@ class PromptBuilder:
                 memory_context = self._truncate_to_budget(
                     memory_context, budget.memory_budget
                 )
-            parts.append(memory_context)
+            zone_c_parts.append(memory_context)
 
         # C2. 经验注入（始终注入）
         if experience:
@@ -1124,7 +1128,7 @@ class PromptBuilder:
                     experience_section = self._truncate_to_budget(
                         experience_section, budget.experience_budget
                     )
-                parts.append(experience_section)
+                zone_c_parts.append(experience_section)
 
         # C3. 对话摘要（仅在无 resume 时注入）
         if not has_resume and summary:
@@ -1133,7 +1137,7 @@ class PromptBuilder:
                 summary_text = self._truncate_to_budget(
                     summary_text, int(budget.history_budget * 0.4)
                 )
-            parts.append(summary_text)
+            zone_c_parts.append(summary_text)
 
         # C4. 最近对话历史（仅在无 resume 时注入）
         if not has_resume and history:
@@ -1143,25 +1147,25 @@ class PromptBuilder:
                     history_section = self._truncate_to_budget(
                         history_section, int(budget.history_budget * 0.6)
                     )
-                parts.append(f"\n## 最近对话记录\n{history_section}")
+                zone_c_parts.append(f"\n## 最近对话记录\n{history_section}")
 
         # C5. 上下文信息
         if ts_code:
-            parts.append(f"\n## 当前关注股票: {ts_code}")
+            zone_c_parts.append(f"\n## 当前关注股票: {ts_code}")
 
         # C6. 钉钉渠道上下文（创建定时任务时需要这些值填入 callback JSON）
-        self._inject_dingtalk_context(parts, params)
+        self._inject_dingtalk_context(zone_c_parts, params)
 
         # C7. 质量需求指引（quality_focus 驱动）
         if quality_focus:
             qf_guidance = self._build_quality_focus_guidance(quality_focus)
             if qf_guidance:
-                parts.append(qf_guidance)
+                zone_c_parts.append(qf_guidance)
 
         # C8. 条件覆盖指令（语种）— 放在整个 prompt 最末尾，首尾夹击改为单段末尾覆盖
         #     原头部 + 尾部两段合并为一段，确保 LLM 在读完全部上下文后仍记住语种要求
         if report_lang == "en":
-            parts.append(
+            zone_c_parts.append(
                 "# ⚠️ CRITICAL INSTRUCTION: ENGLISH ONLY\n"
                 "**The user asked in English. You MUST write your ENTIRE response in English.**\n"
                 "This instruction has the HIGHEST priority and overrides ALL other language rules above.\n"
@@ -1173,4 +1177,11 @@ class PromptBuilder:
                 "table headers — MUST be in English. Do NOT use Chinese."
             )
 
-        return "\n".join(parts)
+        if as_blocks:
+            return self.build_system_prompt_blocks(
+                zone_a="\n".join(zone_a_parts),
+                zone_b="\n".join(zone_b_parts),
+                zone_c="\n".join(zone_c_parts),
+            )
+
+        return "\n".join(zone_a_parts + zone_b_parts + zone_c_parts)

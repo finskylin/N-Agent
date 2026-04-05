@@ -77,6 +77,8 @@ class HookManager:
 
         # 预测提取器（Stop Hook 异步触发）
         self._prediction_extractor = None
+        # eval 模式：跳过知识蒸馏/反思/预测提取等后处理写入
+        self.skip_memory = False
 
         # CLAW 扩展: 新增 3 个 hook 列表
         from typing import Callable
@@ -942,7 +944,9 @@ class HookManager:
                             conversation_context=f"用户: {_user_query}\n助手: {_assistant_text[:1000]}",
                         )
                     _loop_normal_exit = result_data.get("loop_normal_exit", True)
-                    if self._knowledge_guard:
+                    if self.skip_memory:
+                        logger.info("[Hook:Stop] skip_memory=True, skipping knowledge finalize")
+                    elif self._knowledge_guard:
                         asyncio.create_task(
                             self._knowledge_guard.safe_finalize(
                                 self._knowledge_tracker, self._knowledge_store,
@@ -965,7 +969,7 @@ class HookManager:
                     logger.debug(f"[Hook:Stop] Knowledge engine finalize failed: {ke_err}")
 
             # --- 预测提取（异步，完全不阻塞响应流）---
-            if self._prediction_extractor:
+            if self._prediction_extractor and not self.skip_memory:
                 try:
                     _user_q = getattr(request, "message", "")
                     _asst_text = "".join(accumulated_text_ref) if accumulated_text_ref else ""

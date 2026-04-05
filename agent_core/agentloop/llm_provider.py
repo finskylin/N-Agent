@@ -709,7 +709,8 @@ async def stream_anthropic_api(
 
                 provider.report_success(ep.name)
 
-                async for line in _aiter_lines_with_timeout(resp, idle_timeout=min(timeout, 60.0)):
+                _stream_idle = _get_perf_config().get("llm_stream", {}).get("idle_timeout_seconds", 30.0)
+                async for line in _aiter_lines_with_timeout(resp, idle_timeout=min(timeout, _stream_idle)):
                     if line.startswith("data: "):
                         data_str = line[6:]
                     elif line.startswith("data:"):
@@ -802,6 +803,7 @@ class _Endpoint:
     model: str
     small_fast_model: str = ""
     priority: int = 0
+    support_image: bool = False
 
 
 # Circuit breaker 参数（LiteLLMProvider 专用）
@@ -874,6 +876,7 @@ class LiteLLMProvider:
                 model=ep_cfg.get("model", ""),
                 small_fast_model=ep_cfg.get("small_fast_model", ""),
                 priority=ep_cfg.get("priority", 999),
+                support_image=str(ep_cfg.get("support_image", "false")).upper() in ("TRUE", "1", "YES"),
             )
             if ep.api_key and ep.base_url:
                 endpoints.append(ep)
@@ -891,8 +894,10 @@ class LiteLLMProvider:
         """使用全局连接池"""
         return _get_http_client(base_url, timeout)
 
-    def _get_ordered_endpoints(self) -> List[_Endpoint]:
-        """返回按 priority 排序、跳过熔断端点的端点列表"""
+    def _get_ordered_endpoints(self, require_image: bool = False) -> List[_Endpoint]:
+        """返回按 priority 排序、跳过熔断端点的端点列表。
+        当 require_image=True 时，support_image=True 的端点优先排到前面。
+        """
         now = time.time()
         available = []
         skipped = []
@@ -908,6 +913,18 @@ class LiteLLMProvider:
                 "using least-recently failed as fallback"
             )
             return skipped
+
+        # 图片场景：support_image 端点优先，其他保持原顺序兜底
+        if require_image:
+            image_eps = [ep for ep in available if ep.support_image]
+            other_eps = [ep for ep in available if not ep.support_image]
+            if image_eps:
+                logger.info(
+                    f"[LiteLLMProvider] Image detected, prioritizing vision endpoints: "
+                    f"{[ep.name for ep in image_eps]}"
+                )
+                return image_eps + other_eps
+
         return available
 
     def _report_success(self, name: str) -> None:
@@ -930,6 +947,22 @@ class LiteLLMProvider:
                 f"will retry after {_CB_RECOVERY_TIMEOUT}s"
             )
 
+    @staticmethod
+    def _messages_contain_image(messages: List[Dict[str, Any]]) -> bool:
+        """检测消息列表中是否包含图片内容"""
+        for msg in messages:
+            content = msg.get("content")
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "image":
+                        return True
+                    if isinstance(block, dict) and block.get("type") == "image_url":
+                        return True
+                    # Anthropic 格式
+                    if isinstance(block, dict) and block.get("source", {}).get("type") == "base64":
+                        return True
+        return False
+
     async def chat(
         self,
         messages: List[Dict[str, Any]],
@@ -940,7 +973,8 @@ class LiteLLMProvider:
         timeout: float = 120.0,
     ) -> LLMResponse:
         """非流式调用 LLM"""
-        endpoints = self._get_ordered_endpoints()
+        require_image = self._messages_contain_image(messages)
+        endpoints = self._get_ordered_endpoints(require_image=require_image)
         if not endpoints:
             raise RuntimeError("[LiteLLMProvider] No LLM endpoints configured")
 
@@ -987,7 +1021,8 @@ class LiteLLMProvider:
             {type: "tool_call_complete", tool_call: ToolCallRequest}
             {type: "llm_response", response: LLMResponse}
         """
-        endpoints = self._get_ordered_endpoints()
+        require_image = self._messages_contain_image(messages)
+        endpoints = self._get_ordered_endpoints(require_image=require_image)
         if not endpoints:
             raise RuntimeError("[LiteLLMProvider] No LLM endpoints configured")
 
@@ -1043,7 +1078,14 @@ class LiteLLMProvider:
                         # winner 出错，通知消费者
                         await queue.put((ep.name, _SENTINEL))
 
+            async def _watch_all_failed() -> None:
+                """所有 race 任务都结束且没有 winner 时，往 queue 放哨兵触发 fallback"""
+                await asyncio.gather(*tasks, return_exceptions=True)
+                if winner_name is None:
+                    await queue.put(("__all_failed__", _SENTINEL))
+
             tasks = [asyncio.create_task(_feed(ep)) for ep in race_eps]
+            asyncio.create_task(_watch_all_failed())
             race_start = time.time()
 
             _race_timed_out = False
@@ -1051,12 +1093,13 @@ class LiteLLMProvider:
                 # 等待第一个 event 或所有任务结束
                 while True:
                     try:
-                        item = await asyncio.wait_for(queue.get(), timeout=120.0)
+                        _q_idle = race_cfg.get("queue_idle_timeout_seconds", 30.0)
+                        item = await asyncio.wait_for(queue.get(), timeout=_q_idle)
                     except asyncio.TimeoutError:
-                        # 120s 内没有新 token → winner 流挂死，标记为失败以触发 fallback
+                        # queue_idle_timeout_seconds 内没有新 token → winner 流挂死，标记为失败以触发 fallback
                         _timeout_target = winner_name or "unknown"
                         logger.warning(
-                            f"[LiteLLMProvider] stream race idle timeout (120s) on '{_timeout_target}', "
+                            f"[LiteLLMProvider] stream race idle timeout (30s) on '{_timeout_target}', "
                             f"marking as failed and falling back"
                         )
                         if winner_name:
@@ -1068,7 +1111,10 @@ class LiteLLMProvider:
 
                     ep_name, event = item
                     if event is _SENTINEL:
-                        # winner 流结束
+                        if ep_name == "__all_failed__":
+                            # 所有 race 端点都快速失败，立即进入 fallback（不再等 120s timeout）
+                            logger.warning("[LiteLLMProvider] stream race all endpoints failed immediately, fallback now")
+                        # winner 流结束 或 全部失败
                         break
                     if winner_name and ep_name == winner_name:
                         if winner_name != getattr(self, "_last_race_winner", None):
@@ -1329,6 +1375,8 @@ class LiteLLMProvider:
                     u = event_data.get("message", {}).get("usage", {})
                     if u:
                         usage["input_tokens"] = u.get("input_tokens", 0)
+                        usage["cache_read_input_tokens"] = u.get("cache_read_input_tokens", 0)
+                        usage["cache_creation_input_tokens"] = u.get("cache_creation_input_tokens", 0)
 
         # 构建最终 LLMResponse
         tool_calls = []
@@ -1423,6 +1471,8 @@ class LiteLLMProvider:
             usage={
                 "input_tokens": usage.get("input_tokens", 0),
                 "output_tokens": usage.get("output_tokens", 0),
+                "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
+                "cache_creation_input_tokens": usage.get("cache_creation_input_tokens", 0),
             },
             thinking_content="".join(thinking_parts) if thinking_parts else None,
             thinking_signature=thinking_signature,

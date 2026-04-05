@@ -55,12 +55,18 @@ class V4NativeAgent:
     - 技能执行使用独立实例（不共享 V3 实例）
     """
 
-    _shared_evolver = None  # 类级别共享 SkillEvolver 实例
+    _shared_evolver = None       # 类级别共享 SkillEvolver 实例
+    _shared_knowledge_store = None  # 类级别共享 KnowledgeStore 实例
 
     @classmethod
     def get_skill_evolver(cls):
         """返回共享 SkillEvolver 实例（由首个 Agent 实例初始化时注册）"""
         return cls._shared_evolver
+
+    @classmethod
+    def get_knowledge_store(cls):
+        """返回共享 KnowledgeStore 实例（用于分步评测回退）"""
+        return cls._shared_knowledge_store
 
     def __init__(self):
         # V4 配置
@@ -122,11 +128,13 @@ class V4NativeAgent:
 
         # V4 Persistence Layer（skill 输出持久化，用于 data2ui 历史恢复）
         _persistence = None
+        self._persistence = None
         try:
             from .persistence import V4PersistenceLayer
             _persistence = V4PersistenceLayer(
                 default_user_id=self._config.default_user_id,
             )
+            self._persistence = _persistence
         except Exception as e:
             logger.debug(f"[V4] V4PersistenceLayer init skipped: {e}")
 
@@ -496,6 +504,7 @@ class V4NativeAgent:
                 if self._memory_engine else None
             )
             self._ke_store = KnowledgeStore(self._sqlite_db, ke_config, embedding_client=_ke_embedding_client)
+            V4NativeAgent._shared_knowledge_store = self._ke_store  # 暴露给 cron 分步评测
             self._ke_episode_tracker = EpisodeTracker(ke_config)
             self._ke_temporal = TemporalKnowledgeManager(self._ke_store, ke_config)
             self._ke_guard = KnowledgeEngineGuard(
@@ -715,6 +724,23 @@ class V4NativeAgent:
             except Exception as e:
                 logger.debug(f"[V4] SkillEvolver init skipped: {e}")
 
+            # AutoDream: DreamConsolidator（周期性深度记忆整合）
+            self._ke_dream_consolidator = None
+            try:
+                if getattr(self._config, "dream_enabled", True):
+                    from agent_core.knowledge.dream_consolidator import DreamConsolidator
+                    self._ke_dream_consolidator = DreamConsolidator(
+                        config=self._config,
+                        knowledge_store=self._ke_store,
+                        graph_store=_graph_store,
+                        mtm=self._memory_engine.get("mtm") if self._memory_engine else None,
+                        sqlite_db=self._sqlite_db,
+                        llm_call=_llm_call,
+                    )
+                    logger.info("[V4] DreamConsolidator initialized")
+            except Exception as e:
+                logger.warning(f"[V4] DreamConsolidator init skipped: {e}")
+
             logger.info(
                 f"[V4] Knowledge engine initialized "
                 f"(store={'ok' if self._ke_store else 'no'}, "
@@ -725,7 +751,8 @@ class V4NativeAgent:
                 f"evolution={'ok' if self._ke_evolution else 'no'}, "
                 f"crystallizer={'ok' if self._ke_crystallizer else 'no'}, "
                 f"prediction={'ok' if _prediction_store else 'no'}, "
-                f"skill_evolver={'ok' if self._ke_skill_evolver else 'no'})"
+                f"skill_evolver={'ok' if self._ke_skill_evolver else 'no'}, "
+                f"dream={'ok' if self._ke_dream_consolidator else 'no'})"
             )
         except Exception as e:
             logger.warning(f"[V4] Knowledge engine init failed: {e}")
@@ -1319,6 +1346,7 @@ class V4NativeAgent:
             phase0_topics=None,
             quality_focus=data_collector.quality_focus,
             report_lang=request.report_lang,
+            as_blocks=True,
         )
 
         # ── 构建用户消息（运行时上下文前缀 + @skill 强制路由 + 钉钉 cron 指令）──
@@ -1492,7 +1520,11 @@ class V4NativeAgent:
         context_builder = ContextBuilder()
 
         # 5. SessionEngine（注入已有组件，不重新初始化）
+        _skip_memory = getattr(request, "skip_memory", False)
+
         session_engine = SessionEngine(config=self._config)
+        session_engine.skip_memory = _skip_memory
+        self._hook_manager.skip_memory = _skip_memory
         session_engine.inject_components(
             history=self._history,
             experience=self._experience,
@@ -1505,6 +1537,7 @@ class V4NativeAgent:
             prediction_store=getattr(self, "_ke_prediction_store", None),
             prediction_extractor=getattr(self, "_ke_prediction_extractor", None),
             prediction_scheduler=getattr(self, "_ke_prediction_scheduler", None),
+            dream_consolidator=getattr(self, "_ke_dream_consolidator", None),
         )
 
         # Phase 6: 构建 SubAgentExecutor（在 hook_engine + skill_invoker 就绪后）
@@ -1585,6 +1618,18 @@ class V4NativeAgent:
         if getattr(self._config, "permission_guard_enabled", False):
             _permission_guard = PermissionGuard(enabled=True)
 
+        # Token 优化: ToolResultSummarizer
+        from agent_core.agentloop import ToolResultSummarizer
+        _summarizer = None
+        if getattr(self._config, "tool_result_summarize_enabled", True):
+            _summarizer = ToolResultSummarizer(
+                llm_provider=llm_provider,
+                threshold=getattr(self._config, "tool_result_summarize_threshold", 20000),
+                hard_limit=getattr(self._config, "tool_result_summarize_hard_limit", 50000),
+                enabled=True,
+                timeout=getattr(self._config, "tool_result_summarize_timeout", 60.0),
+            )
+
         # 6. AgentLoop（注入所有 opt-in 组件）
         agent_loop = AgentLoop(
             llm_provider=llm_provider,
@@ -1599,6 +1644,8 @@ class V4NativeAgent:
             parallel_executor=_parallel_executor,
             compactor=_compactor,
             permission_guard=_permission_guard,
+            summarizer=_summarizer,
+            single_message_max_chars=getattr(self._config, "context_single_message_max_chars", 30000),
         )
 
         # ── 执行 AgentLoop，yield SSE 事件 ──

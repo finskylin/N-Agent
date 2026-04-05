@@ -3,9 +3,13 @@
         "lazy_load": true
     },
     "llm_race": {
-        "enabled": true,
-        "concurrency": 2,
-        "timeout_seconds": 20
+        "enabled": false,
+        "concurrency": 1,
+        "timeout_seconds": 20,
+        "queue_idle_timeout_seconds": 30
+    },
+    "llm_stream": {
+        "idle_timeout_seconds": 30
     },
     "http_pool": {
         "enabled": true,

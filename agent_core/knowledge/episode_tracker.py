@@ -4,6 +4,7 @@ Episode Tracker — 执行轨迹采集
 在请求生命周期中收集 Skill 执行数据、置信度评估、用户反馈。
 通过 PostToolUse Hook 挂载，不修改核心流程。
 """
+import asyncio
 import copy
 import re
 import time

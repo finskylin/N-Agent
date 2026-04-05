@@ -73,6 +73,8 @@ class AgentLoop:
         output_validator=None,           # Phase 5
         agent_id: Optional[str] = None,          # 唯一标识（不传则自动生成）
         parent_agent_id: Optional[str] = None,   # 父代理 ID（子代理时传入）
+        summarizer=None,                 # ToolResultSummarizer（工具结果语义压缩）
+        single_message_max_chars: int = 0,  # 单条消息硬上限（0=不限制）
     ):
         self._llm = llm_provider
         self._invoker = skill_invoker
@@ -88,12 +90,23 @@ class AgentLoop:
         self._compactor = compactor
         self._permission_guard = permission_guard
         self._output_validator = output_validator
+        self._summarizer = summarizer
+        self._single_message_max_chars = single_message_max_chars
         # 唯一标识
         self.agent_id: str = agent_id or f"agent-{uuid.uuid4().hex[:8]}"
         self.parent_agent_id: Optional[str] = parent_agent_id
         # 将 agent_id 同步到 HookEngine
         if hook_engine is not None:
             hook_engine.agent_id = self.agent_id
+        # token 累计统计
+        self._token_stats: Dict[str, int] = {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+            "summarizer_calls": 0,
+            "summarized_chars_saved": 0,
+        }
 
     # ─── 辅助：给所有 hook context 注入 agent_id ───────────────────
 
@@ -119,7 +132,7 @@ class AgentLoop:
 
     async def run(
         self,
-        system_prompt: str,
+        system_prompt,  # str | List[dict] (cache_control blocks)
         user_message: str,
         request,             # V4AgentRequest
         data_collector=None, # DataCollector
@@ -191,7 +204,7 @@ class AgentLoop:
         _truncation_retry_count: int = 0
         _max_truncation_retry: int = getattr(self._config, "loop_max_truncation_retry", 2)
 
-        while iteration < self._max_iterations:
+        while self._max_iterations <= 0 or iteration < self._max_iterations:
             # 时间维度检查
             _elapsed = time.time() - _loop_start_time
             if _elapsed > self._max_timeout_seconds:
@@ -340,6 +353,11 @@ class AgentLoop:
                     finish_reason="tool_use" if pending_tool_calls else "stop",
                 )
 
+
+            # ── 累加 token 统计 ──
+            _u = getattr(current_response, "usage", {}) or {}
+            for _k in ("input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"):
+                self._token_stats[_k] += _u.get(_k, 0)
 
             # ── c. POST_LLM_CALL hook ──
             try:
@@ -665,8 +683,21 @@ class AgentLoop:
 
                 yield self._tag(make_tool_done(tool_name, result))
 
+            # ── 工具结果语义压缩（hook 已完成，完整数据已送出）──
+            if self._summarizer:
+                try:
+                    original_chars = sum(len(str(r.content or "")) for r in tool_results)
+                    tool_results = await self._summarizer.maybe_summarize_batch(tool_results, user_message)
+                    compressed_chars = sum(len(str(r.content or "")) for r in tool_results)
+                    saved = original_chars - compressed_chars
+                    if saved > 0:
+                        self._token_stats["summarizer_calls"] += 1
+                        self._token_stats["summarized_chars_saved"] += saved
+                except Exception as e:
+                    logger.debug(f"[AgentLoop:{self.agent_id}] summarizer failed: {e}")
+
             # 将工具结果追加到消息数组
-            self._builder.add_tool_results(tool_results)
+            self._builder.add_tool_results(tool_results, max_chars=self._single_message_max_chars)
 
             # ── e. Phase 3: 上下文压缩检查 ──
             if self._compactor:
@@ -713,11 +744,20 @@ class AgentLoop:
             yield self._tag(hook_evt)
 
         # ── 7. done 事件（立即发出，不等后处理）──
+        logger.info(
+            f"[AgentLoop:{self.agent_id}] token_usage: "
+            f"input={self._token_stats['input_tokens']} "
+            f"output={self._token_stats['output_tokens']} "
+            f"cache_read={self._token_stats['cache_read_input_tokens']} "
+            f"cache_creation={self._token_stats['cache_creation_input_tokens']} | "
+            f"summarizer: {self._token_stats['summarizer_calls']} calls, "
+            f"saved {self._token_stats['summarized_chars_saved']} chars"
+        )
         yield self._tag(make_done(
             final_text=final_text,
             tools_used=tools_used,
             total_iterations=iteration,
-            metadata={"agent_id": self.agent_id},
+            metadata={"agent_id": self.agent_id, "token_usage": dict(self._token_stats)},
         ))
 
         # ── 8. 后台保存历史/经验/知识（不阻塞响应流）──

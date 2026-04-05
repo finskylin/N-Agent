@@ -326,6 +326,11 @@ class SessionContextDB:
              "added edge_status to knowledge_edges"),
             ("ALTER TABLE knowledge_edges ADD COLUMN version INTEGER DEFAULT 1",
              "added version to knowledge_edges"),
+            # 知识来源追踪
+            ("ALTER TABLE knowledge_units ADD COLUMN source_type TEXT DEFAULT 'unknown'",
+             "added source_type to knowledge_units"),
+            ("ALTER TABLE knowledge_units ADD COLUMN source_batch_id TEXT DEFAULT NULL",
+             "added source_batch_id to knowledge_units"),
         ]
         for sql, desc in migrations:
             try:
@@ -333,6 +338,16 @@ class SessionContextDB:
                 logger.info(f"[SessionContextDB] Migration: {desc}")
             except Exception:
                 pass  # 列已存在，忽略
+
+        # 知识来源追踪索引（幂等建立）
+        for idx_sql in [
+            "CREATE INDEX IF NOT EXISTS idx_ku_source_type ON knowledge_units(source_type)",
+            "CREATE INDEX IF NOT EXISTS idx_ku_source_batch ON knowledge_units(source_batch_id)",
+        ]:
+            try:
+                await db.execute(idx_sql)
+            except Exception:
+                pass
 
         # 知识图谱表（幂等建表）
         graph_schema = """

@@ -11,8 +11,8 @@ akshare
 adata
 
 # Data Processing
-pandas==2.3.3
-numpy==2.2.6
+pandas==2.2.0
+numpy>=1.26.0,<2.0.0
 
 # ML Models
 xgboost==2.0.3
@@ -30,8 +30,8 @@ aiohttp
 
 # Configuration
 python-dotenv==1.0.0
-pydantic>=2.8.0,<3.0.0
-pydantic-settings>=2.6.1
+pydantic>=2.5.0,<3.0.0
+pydantic-settings>=2.5.0,<2.6.0
 
 # Database
 sqlalchemy==2.0.25

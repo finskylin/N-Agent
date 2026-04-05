@@ -396,13 +396,17 @@ class SubAgentExecutor:
         except Exception as e:
             logger.warning(f"[SubAgent:bg] Task registration failed (non-fatal): {e}")
 
+        # bg 模式 session_id 使用 task_hash（与同步模式一致，确保重试时可复用历史）
+        task_hash = hashlib.sha256(task.encode()).hexdigest()[:8]
+        bg_sub_session_id = f"sub_{parent_session_id}_{task_hash}" if parent_session_id else f"sub_{sub_agent_id}"
+
         # 写入 SubAgentRecord
         if self._subagent_store:
             await self._subagent_store.insert(
                 sub_agent_id=sub_agent_id,
                 parent_agent_id=parent_agent_id,
                 parent_session_id=parent_session_id,
-                sub_session_id=f"sub_{parent_session_id}_{sub_agent_id}",
+                sub_session_id=bg_sub_session_id,
                 user_id=user_id,
                 task=task,
                 depth=current_depth + 1,
@@ -412,6 +416,7 @@ class SubAgentExecutor:
         asyncio.create_task(
             self._run_background_agent(
                 sub_agent_id=sub_agent_id,
+                bg_sub_session_id=bg_sub_session_id,
                 task=task,
                 parent_agent_id=parent_agent_id,
                 current_depth=current_depth,
@@ -439,6 +444,7 @@ class SubAgentExecutor:
     async def _run_background_agent(
         self,
         sub_agent_id: str,
+        bg_sub_session_id: str,
         task: str,
         parent_agent_id: str,
         current_depth: int,
@@ -454,10 +460,11 @@ class SubAgentExecutor:
         _bg_max_iterations = getattr(self._config, "bg_subagent_max_iterations", 100)
         _bg_max_timeout = getattr(self._config, "bg_subagent_max_timeout_seconds", 3600)
 
-        sub_session_id = f"sub_{parent_session_id}_{sub_agent_id}"
+        sub_session_id = bg_sub_session_id
         accumulated: List[str] = []
         tools_used: List[str] = []
         final_status = "completed"
+        exit_reason = ""
         exit_code = 0
 
         try:
@@ -563,6 +570,7 @@ class SubAgentExecutor:
                     if final and not accumulated:
                         accumulated.append(final)
                     tools_used = event.get("data", {}).get("tools_used", [])
+                    exit_reason = event.get("data", {}).get("exit_reason", "")
 
         except asyncio.CancelledError:
             logger.warning(f"[SubAgent:bg] {sub_agent_id} cancelled")
@@ -575,6 +583,15 @@ class SubAgentExecutor:
             accumulated = [f"[SubAgent:bg] 执行失败: {e}"]
         finally:
             result = "".join(accumulated) or "[SubAgent:bg] 未返回任何内容"
+
+            # 判断是否因 max_iterations/timeout 中断（区别于正常失败）
+            if final_status == "completed" and exit_reason in ("max_iterations", "timeout"):
+                final_status = "interrupted"
+                exit_code = 3
+                logger.warning(
+                    f"[SubAgent:bg] {sub_agent_id} interrupted by {exit_reason}, "
+                    f"session_id={sub_session_id} preserved for resume"
+                )
 
             # 保存对话历史
             if session_engine:

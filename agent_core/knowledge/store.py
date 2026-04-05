@@ -77,7 +77,14 @@ class KnowledgeStore:
 
     # ──── Knowledge Units ────
 
-    async def save_knowledge(self, unit: KnowledgeUnit, user_id: int, instance_id: str):
+    async def save_knowledge(
+        self,
+        unit: KnowledgeUnit,
+        user_id: int,
+        instance_id: str,
+        source_type: str = "unknown",
+        source_batch_id: Optional[str] = None,
+    ):
         """保存知识单元"""
         await self._db._ensure_init()
         tags_json = json.dumps(unit.tags, ensure_ascii=False)
@@ -90,14 +97,16 @@ class KnowledgeStore:
                     feedback_reinforcements, feedback_decays,
                     event_time, ingestion_time, valid_from, valid_until,
                     superseded_by, supersedes, update_reason,
-                    source_episode_id, created_at, last_accessed)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                    source_episode_id, created_at, last_accessed,
+                    source_type, source_batch_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (unit.unit_id, user_id, instance_id, unit.category, unit.text, tags_json,
                  unit.utility, unit.confidence, unit.access_count, unit.hit_count,
                  unit.feedback_reinforcements, unit.feedback_decays,
                  unit.event_time, unit.ingestion_time, unit.valid_from, unit.valid_until,
                  unit.superseded_by, unit.supersedes, unit.update_reason,
-                 unit.source_episode_id, unit.created_at, unit.last_accessed),
+                 unit.source_episode_id, unit.created_at, unit.last_accessed,
+                 source_type, source_batch_id),
             )
             await db.commit()
 
@@ -265,6 +274,25 @@ class KnowledgeStore:
                 values,
             )
             await db.commit()
+
+    async def rollback_knowledge_batch(self, batch_id: str) -> int:
+        """
+        回退指定批次的知识（soft delete：设置 valid_until = now）。
+        返回回退的条数。
+        """
+        await self._db._ensure_init()
+        now = time.time()
+        async with self._db._connect() as db:
+            await self._db._setup_conn(db)
+            cursor = await db.execute(
+                "UPDATE knowledge_units SET valid_until = ?, update_reason = ? "
+                "WHERE source_batch_id = ? AND valid_until IS NULL",
+                (now, f"eval_rollback:{batch_id}", batch_id),
+            )
+            await db.commit()
+            count = cursor.rowcount
+        logger.info(f"[KnowledgeStore] rollback_knowledge_batch: batch={batch_id}, count={count}")
+        return count
 
     async def get_knowledge_by_id(self, unit_id: str) -> Optional[KnowledgeUnit]:
         """按 ID 获取知识单元"""

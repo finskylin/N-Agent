@@ -91,15 +91,23 @@ EOF
 }
 ```
 
-### 步骤完成
+### 步骤完成（含环境状态快照，供断点恢复使用）
 ```json
 {
   "action": "update",
   "session_id": "dingtalk_xxx_123",
   "todo_id": "step_1",
-  "status": "completed"
+  "status": "completed",
+  "note": "已写入 /opt/agent-workspace/myapp/main.py (850字节)"
 }
 ```
+
+**note 字段规范（每步完成时必须写入，格式：操作描述 + 关键路径/状态）：**
+- 文件写入：`"已写入 /opt/agent-workspace/xxx/app.py (字节数)"`
+- 服务启动：`"toolbox 内已启动 uvicorn 8080，外部访问验证未完成"`
+- 数据获取：`"已获取数据，存入 /tmp/xxx.json"`
+
+note 使恢复时无需重新探索环境，直接从断点继续。
 
 ### 步骤失败（附原因）
 ```json

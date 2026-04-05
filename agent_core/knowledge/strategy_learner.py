@@ -298,17 +298,14 @@ class StrategyLearner:
         )
 
         try:
-            text = await asyncio.wait_for(
-                self._llm_call(
-                    prompt=prompt,
-                    use_small_fast=False,
-                    max_tokens=1024,
-                    timeout=35.0,
-                ),
-                timeout=40.0,
+            text = await self._llm_call(
+                prompt=prompt,
+                use_small_fast=False,
+                max_tokens=1024,
+                timeout=35.0,
             )
         except asyncio.TimeoutError:
-            logger.debug("[StrategyLearner] LLM call timed out (30s)")
+            logger.debug("[StrategyLearner] LLM call timed out")
             return []
 
         if not text:

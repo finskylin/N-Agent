@@ -40,6 +40,7 @@ from .source_registry import (
     reset_registry,
 )
 from .skill_evolver import SkillEvolver
+from .dream_consolidator import DreamConsolidator
 
 __all__ = [
     "KnowledgeUnit",
@@ -68,4 +69,6 @@ __all__ = [
     "reset_registry",
     # Ring 2: Skill 进化
     "SkillEvolver",
+    # AutoDream: 周期性深度记忆整合
+    "DreamConsolidator",
 ]

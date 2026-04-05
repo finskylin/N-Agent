@@ -1,6 +1,6 @@
 {
-  "_comment": "LLM 端点链配置。priority 越小越优先。max_retry_endpoints 控制每次请求最多尝试几个端点。failover_threshold: 连续失败N次提升下一个端点，被降级端点连续成功N次后恢复。",
-  "max_retry_endpoints": 3,
+  "_comment": "LLM 端点链配置。priority 越小越优先。max_retry_endpoints 控制每次请求最多尝试几个端点。failover_threshold: 连续失败N次提升下一个端点。support_image: 是否支持图片输入（多模态），用户发图片时优先选用。",
+  "max_retry_endpoints": 5,
   "failover_threshold": 3,
   "endpoints": [
     {
@@ -11,6 +11,7 @@
       "model": "${ANTHROPIC_MODEL_C}",
       "small_fast_model": "${ANTHROPIC_SMALL_FAST_MODEL_C}",
       "context_window": 131072,
+      "support_image": "${ANTHROPIC_SUPPORT_IMAGE_C}",
       "enabled": true
     },
     {
@@ -21,6 +22,7 @@
       "model": "${ANTHROPIC_MODEL}",
       "small_fast_model": "${ANTHROPIC_SMALL_FAST_MODEL}",
       "context_window": 131072,
+      "support_image": "${ANTHROPIC_SUPPORT_IMAGE}",
       "enabled": true
     },
     {
@@ -31,16 +33,29 @@
       "model": "${ANTHROPIC_MODEL_D}",
       "small_fast_model": "${ANTHROPIC_SMALL_FAST_MODEL_D}",
       "context_window": 131072,
+      "support_image": "${ANTHROPIC_SUPPORT_IMAGE_D}",
+      "enabled": true
+    },
+    {
+      "name": "local_litellm",
+      "priority": 4,
+      "base_url": "${ANTHROPIC_BASE_URL_N}",
+      "api_key": "${ANTHROPIC_AUTH_TOKEN_N}",
+      "model": "${ANTHROPIC_MODEL_N}",
+      "small_fast_model": "${ANTHROPIC_SMALL_FAST_MODEL_N}",
+      "context_window": 131072,
+      "support_image": "${ANTHROPIC_SUPPORT_IMAGE_N}",
       "enabled": true
     },
     {
       "name": "litellm",
-      "priority": 4,
+      "priority": 5,
       "base_url": "${ANTHROPIC_BASE_URL_BACKUP}",
       "api_key": "${ANTHROPIC_AUTH_TOKEN_BACKUP}",
       "model": "${ANTHROPIC_MODEL_BACKUP}",
       "small_fast_model": "${ANTHROPIC_SMALL_FAST_MODEL_BACKUP}",
       "context_window": 200000,
+      "support_image": "${ANTHROPIC_SUPPORT_IMAGE_BACKUP}",
       "enabled": true
     }
   ]

@@ -114,14 +114,11 @@ class PredictionVerifier:
         )
 
         try:
-            result_text = await asyncio.wait_for(
-                self._llm_call(
-                    prompt=prompt,
-                    use_small_fast=True,
-                    max_tokens=256,
-                    timeout=30.0,
-                ),
-                timeout=35.0,
+            result_text = await self._llm_call(
+                prompt=prompt,
+                use_small_fast=True,
+                max_tokens=256,
+                timeout=30.0,
             )
         except asyncio.TimeoutError:
             logger.debug(f"[PredictionVerifier] LLM timeout for pred_id={pred.get('pred_id')}")
