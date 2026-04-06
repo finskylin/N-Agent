@@ -55,7 +55,6 @@ class SubAgentExecutor:
         parent_event_bridge,        # 父级 EventBridge（SSE 透传目标 + data2ui）
         config,                     # V4Config
         max_depth: int = 3,
-        max_iterations: int = 10,
         enabled: bool = False,
         session_engine=None,        # 真实 SessionEngine（可选，None 则用轻量版）
         hook_plugin_factory: Optional[Callable] = None,  # () -> HookPlugin，每次调用 new 一个
@@ -67,7 +66,6 @@ class SubAgentExecutor:
         self._parent_event_bridge = parent_event_bridge
         self._config = config
         self._max_depth = max_depth
-        self._max_iterations = max_iterations
         self._enabled = enabled
         self._session_engine = session_engine
         self._hook_plugin_factory = hook_plugin_factory
@@ -203,7 +201,6 @@ class SubAgentExecutor:
                 context_builder=sub_builder,
                 event_bridge=None,             # SSE 由 _push_to_parent 透传
                 config=self._config,
-                max_iterations=self._max_iterations,
                 agent_id=sub_agent_id,
                 parent_agent_id=parent_agent_id,
             )
@@ -360,12 +357,45 @@ class SubAgentExecutor:
         parent_session_id: str,
         user_id: int,
         role: str,
+        recovered_sub_agent_id: str = None,
+        recovered_sub_session_id: str = None,
     ) -> str:
         """后台启动子代理，立即返回 task_id"""
         import json
         import os
 
-        sub_agent_id = f"bg_sub-{uuid.uuid4().hex[:8]}"
+        # ── 代码层硬约束（恢复模式跳过，系统主动恢复不受限）──────────────────
+        if not recovered_sub_agent_id and self._subagent_store and parent_session_id:
+            # 提前计算 sub_session_id，供检查1使用
+            _task_hash = hashlib.sha256(task.encode()).hexdigest()[:8]
+            _check_sub_session_id = f"sub_{parent_session_id}_{_task_hash}" if parent_session_id else ""
+
+            # 检查1：同 sub_session_id 去重（同一任务只能有一个运行中）
+            if _check_sub_session_id and await self._subagent_store.is_session_running(_check_sub_session_id):
+                msg = (
+                    f"[SubAgent] 该任务已在后台运行中，禁止重复创建。"
+                    f"请通过 query_subagent 查看任务状态。"
+                )
+                logger.warning(
+                    f"[SubAgent:bg] Rejected duplicate: sub_session={_check_sub_session_id} already running"
+                )
+                return msg
+
+            # 检查2：session 并发上限
+            max_concurrent = getattr(self._config, "subagent_max_concurrent_background", 10)
+            active_count = await self._subagent_store.count_active_background(parent_session_id)
+            if active_count >= max_concurrent:
+                msg = (
+                    f"[SubAgent] 当前 session 已有 {active_count} 个后台任务未完成"
+                    f"（上限 {max_concurrent}），禁止重复创建。"
+                    f"请等待现有任务完成后再试，或通过 query_subagent 查看任务状态。"
+                )
+                logger.warning(
+                    f"[SubAgent:bg] Rejected: session={parent_session_id}, active={active_count}, max={max_concurrent}"
+                )
+                return msg
+
+        sub_agent_id = recovered_sub_agent_id or f"bg_sub-{uuid.uuid4().hex[:8]}"
         task_id = f"bg_agent_{sub_agent_id}"
         log_path = f"/tmp/{task_id}.log"
 
@@ -396,12 +426,15 @@ class SubAgentExecutor:
         except Exception as e:
             logger.warning(f"[SubAgent:bg] Task registration failed (non-fatal): {e}")
 
-        # bg 模式 session_id 使用 task_hash（与同步模式一致，确保重试时可复用历史）
-        task_hash = hashlib.sha256(task.encode()).hexdigest()[:8]
-        bg_sub_session_id = f"sub_{parent_session_id}_{task_hash}" if parent_session_id else f"sub_{sub_agent_id}"
+        # bg 模式 session_id：恢复时复用原 sub_session_id，新启动时基于 task_hash 生成
+        if recovered_sub_session_id:
+            bg_sub_session_id = recovered_sub_session_id
+        else:
+            task_hash = hashlib.sha256(task.encode()).hexdigest()[:8]
+            bg_sub_session_id = f"sub_{parent_session_id}_{task_hash}" if parent_session_id else f"sub_{sub_agent_id}"
 
-        # 写入 SubAgentRecord
-        if self._subagent_store:
+        # 写入 SubAgentRecord（恢复模式下跳过 insert，记录已存在）
+        if self._subagent_store and not recovered_sub_agent_id:
             await self._subagent_store.insert(
                 sub_agent_id=sub_agent_id,
                 parent_agent_id=parent_agent_id,
@@ -441,6 +474,176 @@ class SubAgentExecutor:
             }
         }, ensure_ascii=False)
 
+    async def recover_interrupted(self, store: "SubAgentStore") -> int:
+        """
+        服务启动时调用：扫描并恢复被中断的后台 subagent 任务。
+
+        1. list_interrupted(min_age_seconds=0) 查询所有 status='running' 记录（服务重启，所有 running 均视为中断）
+        2. created_at 超过 24h（86400s）的标为 failed（过期，不恢复）
+        3. 24h 内的：mark_interrupted → 重新 _execute_background（复用 sub_session_id 和 task）
+        4. 返回恢复数量
+        """
+        import time as _time
+
+        try:
+            # claim_interrupted 是原子操作，多进程下只有一个 worker 能 claim 到记录
+            interrupted = await store.claim_interrupted(min_age_seconds=0)
+        except Exception as e:
+            logger.warning(f"[SubAgent:recover] list_interrupted failed: {e}")
+            return 0
+
+        if not interrupted:
+            logger.info("[SubAgent:recover] No interrupted subagents found")
+            return 0
+
+        now = _time.time()
+        expired_ids: List[str] = []
+        to_recover: List[Dict[str, Any]] = []
+
+        for rec in interrupted:
+            age = now - rec.get("created_at", now)
+            if age > 86400:
+                expired_ids.append(rec["sub_agent_id"])
+            else:
+                to_recover.append(rec)
+
+        # 过期记录标为 failed
+        if expired_ids:
+            try:
+                for eid in expired_ids:
+                    await store.complete(eid, "[recover] expired after 24h", [], "failed")
+                logger.info(f"[SubAgent:recover] Marked {len(expired_ids)} expired subagent(s) as failed")
+            except Exception as e:
+                logger.warning(f"[SubAgent:recover] Failed to mark expired records: {e}")
+
+        if not to_recover:
+            logger.info(f"[SubAgent:recover] recovered 0 interrupted subagents (all expired)")
+            return 0
+
+        # ── session 分组去重 ──────────────────────────────────────────────────
+        import json as _json
+        max_concurrent = getattr(self._config, "subagent_max_concurrent_background", 10)
+        cancel_ids: List[str] = []
+        deduped: List[Dict[str, Any]] = []
+
+        # 按 parent_session_id 分组
+        session_groups: Dict[str, List[Dict[str, Any]]] = {}
+        for rec in to_recover:
+            sid = rec.get("parent_session_id", "")
+            session_groups.setdefault(sid, []).append(rec)
+
+        for sid, group in session_groups.items():
+            # 步骤1：同 sub_session_id 去重，保留 tools_used 条数最多的
+            by_sub_session: Dict[str, List[Dict[str, Any]]] = {}
+            for rec in group:
+                key = rec.get("sub_session_id", rec["sub_agent_id"])
+                by_sub_session.setdefault(key, []).append(rec)
+
+            deduped_group: List[Dict[str, Any]] = []
+            for key, recs in by_sub_session.items():
+                if len(recs) == 1:
+                    deduped_group.append(recs[0])
+                else:
+                    # 保留 tools_used 条数最多的（执行进度最深）
+                    best = max(
+                        recs,
+                        key=lambda r: len(_json.loads(r.get("tools_used") or "[]")),
+                    )
+                    deduped_group.append(best)
+                    cancel_ids.extend(r["sub_agent_id"] for r in recs if r is not best)
+
+            # 步骤2：超出 session 并发上限，按 tools_used 条数降序取前 N
+            if len(deduped_group) > max_concurrent:
+                deduped_group.sort(
+                    key=lambda r: len(_json.loads(r.get("tools_used") or "[]")),
+                    reverse=True,
+                )
+                cancel_ids.extend(r["sub_agent_id"] for r in deduped_group[max_concurrent:])
+                deduped_group = deduped_group[:max_concurrent]
+
+            deduped.extend(deduped_group)
+
+        # 批量取消淘汰记录
+        if cancel_ids:
+            try:
+                await store.cancel_by_ids(cancel_ids)
+                logger.info(f"[SubAgent:recover] Cancelled {len(cancel_ids)} duplicate/excess subagent(s): {cancel_ids}")
+            except Exception as e:
+                logger.warning(f"[SubAgent:recover] cancel_by_ids failed: {e}")
+
+        # 逐条重新启动后台 AgentLoop（claim_interrupted 已原子性标记为 recovering）
+        recovered = 0
+        for rec in deduped:
+            try:
+                await self._execute_background(
+                    task=rec["task"],
+                    parent_agent_id=rec.get("parent_agent_id", "recovered"),
+                    current_depth=max(0, rec.get("depth", 1) - 1),
+                    parent_session_id=rec.get("parent_session_id", ""),
+                    user_id=rec.get("user_id", 0),
+                    role="general_expert",
+                    recovered_sub_agent_id=rec["sub_agent_id"],
+                    recovered_sub_session_id=rec.get("sub_session_id", ""),
+                )
+                recovered += 1
+                logger.info(
+                    f"[SubAgent:recover] Resumed {rec['sub_agent_id']} "
+                    f"(session={rec.get('sub_session_id')}, task={rec['task'][:60]!r})"
+                )
+            except Exception as e:
+                logger.warning(f"[SubAgent:recover] Failed to resume {rec['sub_agent_id']}: {e}")
+
+        logger.info(f"[SubAgent:recover] recovered {recovered} interrupted subagent(s)")
+        return recovered
+
+    async def recover_by_session(
+        self,
+        parent_session_id: str,
+        store: "SubAgentStore",
+    ) -> tuple:
+        """
+        问答时调用：找到该 session 下所有 interrupted 的后台 subagent，重新启动。
+        返回 (恢复数量, 当前活跃任务列表)，活跃任务列表供 native_agent 注入 system prompt。
+        """
+        try:
+            records = await store.list_interrupted_by_session(parent_session_id)
+        except Exception as e:
+            logger.warning(f"[SubAgent:recover_by_session] list failed: {e}")
+            records = []
+
+        recovered = 0
+        for rec in records:
+            try:
+                await self._execute_background(
+                    task=rec["task"],
+                    parent_agent_id=rec.get("parent_agent_id", "recovered"),
+                    current_depth=max(0, rec.get("depth", 1) - 1),
+                    parent_session_id=rec.get("parent_session_id", ""),
+                    user_id=rec.get("user_id", 0),
+                    role="general_expert",
+                    recovered_sub_agent_id=rec["sub_agent_id"],
+                    recovered_sub_session_id=rec.get("sub_session_id", ""),
+                )
+                recovered += 1
+                logger.info(
+                    f"[SubAgent:recover_by_session] Resumed {rec['sub_agent_id']} "
+                    f"for session={parent_session_id} task={rec['task'][:60]!r}"
+                )
+            except Exception as e:
+                logger.warning(f"[SubAgent:recover_by_session] Failed to resume {rec['sub_agent_id']}: {e}")
+
+        if recovered:
+            logger.info(f"[SubAgent:recover_by_session] Recovered {recovered} subagent(s) for session={parent_session_id}")
+
+        # 查询当前所有活跃后台任务（含刚恢复的）
+        try:
+            active_tasks = await store.list_active_background(parent_session_id)
+        except Exception as e:
+            logger.warning(f"[SubAgent:recover_by_session] list_active_background failed: {e}")
+            active_tasks = []
+
+        return recovered, active_tasks
+
     async def _run_background_agent(
         self,
         sub_agent_id: str,
@@ -457,9 +660,6 @@ class SubAgentExecutor:
         """在后台独立运行子代理 AgentLoop（通过 asyncio.create_task 启动）"""
         import json
 
-        _bg_max_iterations = getattr(self._config, "bg_subagent_max_iterations", 100)
-        _bg_max_timeout = getattr(self._config, "bg_subagent_max_timeout_seconds", 3600)
-
         sub_session_id = bg_sub_session_id
         accumulated: List[str] = []
         tools_used: List[str] = []
@@ -468,10 +668,7 @@ class SubAgentExecutor:
         exit_code = 0
 
         try:
-            logger.info(
-                f"[SubAgent:bg] {sub_agent_id} starting background AgentLoop "
-                f"(max_iter={_bg_max_iterations}, timeout={_bg_max_timeout}s)"
-            )
+            logger.info(f"[SubAgent:bg] {sub_agent_id} starting background AgentLoop")
 
             # 构建子代理（与同步模式基本相同）
             from .hook_engine import HookEngine
@@ -510,8 +707,6 @@ class SubAgentExecutor:
                 context_builder=sub_builder,
                 event_bridge=None,
                 config=self._config,
-                max_iterations=_bg_max_iterations,
-                max_timeout_seconds=_bg_max_timeout,
                 agent_id=sub_agent_id,
                 parent_agent_id=parent_agent_id,
             )
@@ -583,15 +778,6 @@ class SubAgentExecutor:
             accumulated = [f"[SubAgent:bg] 执行失败: {e}"]
         finally:
             result = "".join(accumulated) or "[SubAgent:bg] 未返回任何内容"
-
-            # 判断是否因 max_iterations/timeout 中断（区别于正常失败）
-            if final_status == "completed" and exit_reason in ("max_iterations", "timeout"):
-                final_status = "interrupted"
-                exit_code = 3
-                logger.warning(
-                    f"[SubAgent:bg] {sub_agent_id} interrupted by {exit_reason}, "
-                    f"session_id={sub_session_id} preserved for resume"
-                )
 
             # 保存对话历史
             if session_engine:

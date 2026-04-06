@@ -1548,8 +1548,9 @@ class V4NativeAgent:
             if _db_path is None:
                 _db_path = getattr(self._history, "_db_path", None) if self._history else None
             if _db_path is None:
-                # 从 config 推断
-                _db_path = getattr(self._config, "db_path", "/app/app/data/agent.db")
+                # fallback：统一用 agent.db，与 main.py 启动恢复路径一致
+                import os as _os
+                _db_path = _os.getenv("V4_SUBAGENT_DB_PATH", "/app/app/data/agent.db")
             _subagent_store = SubAgentStore(db_path=_db_path)
 
             # hook_plugin_factory：每次调用 new 一个独立 LegacyHookPlugin（并发安全）
@@ -1584,7 +1585,6 @@ class V4NativeAgent:
                 parent_event_bridge=self._event_bridge,
                 config=self._config,
                 max_depth=getattr(self._config, "subagent_max_depth", 3),
-                max_iterations=getattr(self._config, "subagent_max_iterations", 10),
                 enabled=True,
                 session_engine=session_engine,
                 hook_plugin_factory=_make_subagent_plugin,
@@ -1593,6 +1593,39 @@ class V4NativeAgent:
             # 将 SubAgentExecutor 和 SubAgentStore 注入到已构建的 SkillInvoker
             skill_invoker._subagent_executor = _subagent_executor
             skill_invoker._subagent_store = _subagent_store
+
+            # 问答时恢复：检查该 session 下是否有 interrupted 的后台 subagent，有则自动续接
+            _interrupted_count, _active_bg_tasks = await _subagent_executor.recover_by_session(
+                parent_session_id=session_id,
+                store=_subagent_store,
+            )
+            if _interrupted_count > 0:
+                logger.info(
+                    f"[V4] Auto-recovered {_interrupted_count} interrupted subagent(s) "
+                    f"for session={session_id}"
+                )
+
+            # 将活跃后台任务注入 system prompt，让 LLM 感知"已有任务在跑"，不重复 spawn
+            if _active_bg_tasks:
+                import time as _time_now
+                _bg_lines = []
+                for _t in _active_bg_tasks:
+                    _elapsed = int((_time_now.time() - _t.get("created_at", _time_now.time())) / 60)
+                    _bg_lines.append(
+                        f"- 任务ID: bg_agent_{_t['sub_agent_id']} | 状态: {_t['status']} | "
+                        f"已运行约 {_elapsed} 分钟\n  任务内容: {_t['task'][:80]}..."
+                    )
+                _bg_block = (
+                    "\n\n## 当前后台任务（系统注入，请勿重复创建）\n\n"
+                    "以下任务正在后台执行。如用户询问进度，直接告知状态，**不要再次调用 spawn_agent**：\n\n"
+                    + "\n".join(_bg_lines)
+                    + "\n\n如需查看详细进度，可调用 query_subagent 工具。"
+                )
+                if isinstance(system_prompt, list):
+                    system_prompt = system_prompt + [{"type": "text", "text": _bg_block}]
+                else:
+                    system_prompt = system_prompt + _bg_block
+                logger.info(f"[V4] Injected {len(_active_bg_tasks)} active bg task(s) into system prompt")
 
         # Phase 2: ParallelToolExecutor
         _parallel_executor = ParallelToolExecutor(
@@ -1639,8 +1672,6 @@ class V4NativeAgent:
             context_builder=context_builder,
             event_bridge=self._event_bridge,
             config=self._config,
-            max_iterations=getattr(self._config, "max_iterations", 30),
-            max_timeout_seconds=getattr(self._config, "max_timeout_seconds", 900),
             parallel_executor=_parallel_executor,
             compactor=_compactor,
             permission_guard=_permission_guard,

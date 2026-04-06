@@ -591,6 +591,52 @@ async def init_systems():
     except Exception as e:
         logger.warning(f"[TaskMonitor] Failed to start: {e}")
 
+    # 9b-3. 恢复被中断的后台 SubAgent 任务（服务重启后自动续接）
+    try:
+        from agent_core.config import V4Config as _V4Config
+        _v4cfg_recover = _V4Config.from_env()
+        _subagent_enabled = getattr(_v4cfg_recover, "subagent_enabled", True)
+        logger.info(f"[SubAgent:recover] subagent_enabled={_subagent_enabled}, starting recovery check")
+        if _subagent_enabled:
+            from agent_core.session.subagent_store import SubAgentStore as _SubAgentStore
+            from agent_core.agentloop import LiteLLMProvider as _LiteLLMProvider, SkillInvoker as _SkillInvoker
+            from agent_core.agentloop.subagent import SubAgentExecutor as _SubAgentExecutor
+            from agent_core.skill_discovery import SkillDiscovery as _SkillDiscovery
+            from agent_core.skill_executor import V4SkillExecutor as _V4SkillExecutor
+
+            # 与 native_agent.py 保持一致：优先用 subagent_db_path 环境变量，
+            # 否则 fallback 到 agent.db（与 native_agent._db_path fallback 路径一致）
+            _recover_db_path = os.getenv("V4_SUBAGENT_DB_PATH", "/app/app/data/agent.db")
+            logger.info(f"[SubAgent:recover] Using DB: {_recover_db_path}")
+            _recover_store = _SubAgentStore(db_path=_recover_db_path)
+
+            # 构建轻量 SkillInvoker（仅用于恢复启动后台任务，不注入 SubAgentExecutor）
+            _recover_skills_dir = getattr(_v4cfg_recover, "skills_dir", "")
+            _recover_discovery = _SkillDiscovery(skills_dir=_recover_skills_dir)
+            _recover_discovery.scan()
+            _recover_skill_executor = _V4SkillExecutor(_recover_discovery)
+            _recover_invoker = _SkillInvoker(executor=_recover_skill_executor, discovery=_recover_discovery)
+            _recover_llm = _LiteLLMProvider(config=_v4cfg_recover)
+
+            _recover_executor = _SubAgentExecutor(
+                llm_provider=_recover_llm,
+                skill_invoker=_recover_invoker,
+                parent_hook_engine=None,
+                parent_event_bridge=None,
+                config=_v4cfg_recover,
+                max_depth=getattr(_v4cfg_recover, "subagent_max_depth", 3),
+                enabled=True,
+                session_engine=None,
+                hook_plugin_factory=None,
+                subagent_store=_recover_store,
+            )
+            _recovered_count = await _recover_executor.recover_interrupted(_recover_store)
+            logger.info(f"[SubAgent:recover] recovered {_recovered_count} interrupted subagent(s) on startup")
+        else:
+            logger.info("[SubAgent:recover] subagent_enabled=False, skipping recovery")
+    except Exception as e:
+        logger.warning(f"[SubAgent:recover] Startup recovery failed (non-fatal): {e}")
+
     # 9c. 初始化钉钉 Stream 机器人（独立通道，可选功能，不影响现有 HTTP API）
     # 关键：钉钉连接失败不能影响主服务启动
     try:

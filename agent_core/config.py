@@ -159,9 +159,7 @@ class V4Config:
     prediction_verify_timeout: int = 30          # 验证超时（秒）
 
 
-    # === AgentLoop 停止条件 ===
-    max_iterations: int = 100              # 最大循环次数
-    max_timeout_seconds: int = 3600        # 最大执行时间（秒），默认 60 分钟
+    # === AgentLoop 停止条件：LLM 无工具调用时自动终止 ===
     max_tokens_per_turn: int = 16384       # 每轮 LLM 最大输出 token 数
     loop_max_truncation_retry: int = 2     # max_tokens 截断续写上限
     loop_treat_unknown_stop_as_complete: bool = True  # 未知 stop_reason 按完成处理
@@ -182,9 +180,7 @@ class V4Config:
     # === Phase 6: SubAgent 子代理配置 ===
     subagent_enabled: bool = True
     subagent_max_depth: int = 3
-    subagent_max_iterations: int = 100
-    bg_subagent_max_iterations: int = 0              # 0 = 不限制迭代次数
-    bg_subagent_max_timeout_seconds: int = 18000   # 异步后台子代理超时，默认 5 小时
+    subagent_max_concurrent_background: int = 10  # 同 session 最多 N 个后台任务并发，超出则拒绝创建
 
     # === AutoDream: 周期性深度记忆整合配置 ===
     dream_enabled: bool = True                    # 是否启用 DreamConsolidator
@@ -338,8 +334,6 @@ class V4Config:
             prediction_extraction_enabled=_to_bool(os.getenv("PREDICTION_EXTRACTION_ENABLED", "true")),
             prediction_staleness_days=int(os.getenv("PREDICTION_STALENESS_DAYS", "30")),
             prediction_verify_timeout=int(os.getenv("PREDICTION_VERIFY_TIMEOUT", "30")),
-            max_iterations=int(os.getenv("V4_MAX_ITERATIONS", "100")),
-            max_timeout_seconds=int(os.getenv("V4_MAX_TIMEOUT_SECONDS", "3600")),
             max_tokens_per_turn=int(os.getenv("V4_MAX_TOKENS_PER_TURN", "16384")),
             loop_max_truncation_retry=int(os.getenv("V4_LOOP_MAX_TRUNCATION_RETRY", "2")),
             loop_treat_unknown_stop_as_complete=_to_bool(os.getenv("V4_LOOP_TREAT_UNKNOWN_STOP_AS_COMPLETE", "true")),
@@ -352,9 +346,7 @@ class V4Config:
             permission_guard_enabled=_to_bool(os.getenv("V4_PERMISSION_GUARD_ENABLED", "false")),
             subagent_enabled=_to_bool(os.getenv("V4_SUBAGENT_ENABLED", "true")),
             subagent_max_depth=int(os.getenv("V4_SUBAGENT_MAX_DEPTH", "3")),
-            subagent_max_iterations=int(os.getenv("V4_SUBAGENT_MAX_ITERATIONS", "100")),
-            bg_subagent_max_iterations=int(os.getenv("V4_BG_SUBAGENT_MAX_ITERATIONS", "0")),
-            bg_subagent_max_timeout_seconds=int(os.getenv("V4_BG_SUBAGENT_MAX_TIMEOUT_SECONDS", "18000")),
+            subagent_max_concurrent_background=int(os.getenv("V4_SUBAGENT_MAX_CONCURRENT_BG", "2")),
             skill_evolution_enabled=_to_bool(os.getenv("SKILL_EVOLUTION_ENABLED", "false")),
             skill_evolution_error_threshold=float(os.getenv("SKILL_EVOLUTION_ERROR_THRESHOLD", "0.3")),
             skill_evolution_min_calls=int(os.getenv("SKILL_EVOLUTION_MIN_CALLS", "5")),
@@ -487,8 +479,6 @@ class V4Config:
             prediction_extraction_enabled=_gb("prediction_extraction_enabled", True),
             prediction_staleness_days=_gi("prediction_staleness_days", 30),
             prediction_verify_timeout=_gi("prediction_verify_timeout", 30),
-            max_iterations=_gi("max_iterations", 30),
-            max_timeout_seconds=_gi("max_timeout_seconds", 720),
             max_tokens_per_turn=_gi("max_tokens_per_turn", 16384),
             loop_max_truncation_retry=_gi("loop_max_truncation_retry", 2),
             loop_treat_unknown_stop_as_complete=_gb("loop_treat_unknown_stop_as_complete", True),
@@ -501,9 +491,7 @@ class V4Config:
             permission_guard_enabled=_gb("permission_guard_enabled", False),
             subagent_enabled=_gb("subagent_enabled", True),
             subagent_max_depth=_gi("subagent_max_depth", 3),
-            subagent_max_iterations=_gi("subagent_max_iterations", 100),
-            bg_subagent_max_iterations=_gi("bg_subagent_max_iterations", 100),
-            bg_subagent_max_timeout_seconds=_gi("bg_subagent_max_timeout_seconds", 3600),
+            subagent_max_concurrent_background=_gi("subagent_max_concurrent_background", 2),
             skill_evolution_enabled=_gb("skill_evolution_enabled", False),
             skill_evolution_error_threshold=_gf("skill_evolution_error_threshold", 0.3),
             skill_evolution_min_calls=_gi("skill_evolution_min_calls", 5),

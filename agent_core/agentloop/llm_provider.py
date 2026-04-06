@@ -1370,13 +1370,33 @@ class LiteLLMProvider:
                     u = event_data.get("usage", {})
                     if u:
                         usage["output_tokens"] = u.get("output_tokens", 0)
+                        # 智谱在 message_delta 返回完整 usage（覆盖 message_start 里的 0 值）
+                        if u.get("input_tokens", 0) > 0:
+                            usage["input_tokens"] = u.get("input_tokens", 0)
+                        if u.get("cache_read_input_tokens", 0) > 0:
+                            usage["cache_read_input_tokens"] = u.get("cache_read_input_tokens", 0)
+                        if u.get("cache_creation_input_tokens", 0) > 0:
+                            usage["cache_creation_input_tokens"] = u.get("cache_creation_input_tokens", 0)
+                        # prompt_tokens_details 兜底（千问格式）
+                        ptd = u.get("prompt_tokens_details", {})
+                        if ptd.get("cached_tokens", 0) > 0:
+                            usage["cache_read_input_tokens"] = ptd["cached_tokens"]
+                        if ptd.get("cache_creation_input_tokens", 0) > 0:
+                            usage["cache_creation_input_tokens"] = ptd["cache_creation_input_tokens"]
 
                 elif event_type == "message_start":
                     u = event_data.get("message", {}).get("usage", {})
                     if u:
                         usage["input_tokens"] = u.get("input_tokens", 0)
+                        # Anthropic 字段
                         usage["cache_read_input_tokens"] = u.get("cache_read_input_tokens", 0)
                         usage["cache_creation_input_tokens"] = u.get("cache_creation_input_tokens", 0)
+                        # 智谱 / 千问字段兼容：prompt_tokens_details.cached_tokens
+                        ptd = u.get("prompt_tokens_details", {})
+                        if ptd.get("cached_tokens", 0) > 0:
+                            usage["cache_read_input_tokens"] = ptd["cached_tokens"]
+                        if ptd.get("cache_creation_input_tokens", 0) > 0:
+                            usage["cache_creation_input_tokens"] = ptd["cache_creation_input_tokens"]
 
         # 构建最终 LLMResponse
         tool_calls = []
@@ -1464,6 +1484,9 @@ class LiteLLMProvider:
             else "stop"
         )
         usage = data.get("usage", {})
+        ptd = usage.get("prompt_tokens_details", {})
+        cache_read = usage.get("cache_read_input_tokens", 0) or ptd.get("cached_tokens", 0)
+        cache_creation = usage.get("cache_creation_input_tokens", 0) or ptd.get("cache_creation_input_tokens", 0)
         return LLMResponse(
             content="".join(text_parts) if text_parts else None,
             tool_calls=tool_calls,
@@ -1471,8 +1494,8 @@ class LiteLLMProvider:
             usage={
                 "input_tokens": usage.get("input_tokens", 0),
                 "output_tokens": usage.get("output_tokens", 0),
-                "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
-                "cache_creation_input_tokens": usage.get("cache_creation_input_tokens", 0),
+                "cache_read_input_tokens": cache_read,
+                "cache_creation_input_tokens": cache_creation,
             },
             thinking_content="".join(thinking_parts) if thinking_parts else None,
             thinking_signature=thinking_signature,

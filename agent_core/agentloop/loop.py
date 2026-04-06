@@ -12,7 +12,7 @@ AgentLoop — 核心 Agent 执行循环
 1. session_engine.prepare_session() → 获取历史/经验/知识
 2. context_builder.build_initial_messages()
 3. hook_engine.fire(ON_LOOP_START)
-4. while iteration < max_iterations:
+4. while True:  # 终止条件：LLM 无工具调用
      a. hook_engine.fire(PRE_LLM_CALL)
      b. llm_provider.chat_stream()
      c. hook_engine.fire(POST_LLM_CALL)
@@ -64,8 +64,6 @@ class AgentLoop:
         context_builder: ContextBuilder,
         event_bridge,            # EventBridge 对象（现有实现）
         config,                  # V4Config
-        max_iterations: int = 100,
-        max_timeout_seconds: int = 1440,
         # === opt-in 组件 ===
         parallel_executor=None,          # Phase 2
         compactor=None,                  # Phase 3
@@ -83,8 +81,6 @@ class AgentLoop:
         self._builder = context_builder
         self._event_bridge = event_bridge
         self._config = config
-        self._max_iterations = max_iterations
-        self._max_timeout_seconds = max_timeout_seconds
         # opt-in
         self._parallel_executor = parallel_executor or _NullParallelExecutor()
         self._compactor = compactor
@@ -200,25 +196,15 @@ class AgentLoop:
         iteration = 0
         final_response: Optional[LLMResponse] = None
         _loop_start_time = time.time()
-        _loop_exit_reason: str = "completed"  # completed | llm_error | truncated | max_iterations | timeout
+        _loop_exit_reason: str = "completed"  # completed | llm_error | truncated
         _truncation_retry_count: int = 0
         _max_truncation_retry: int = getattr(self._config, "loop_max_truncation_retry", 2)
 
-        while self._max_iterations <= 0 or iteration < self._max_iterations:
-            # 时间维度检查
-            _elapsed = time.time() - _loop_start_time
-            if _elapsed > self._max_timeout_seconds:
-                logger.warning(
-                    f"[AgentLoop:{self.agent_id}] Timeout after {_elapsed:.0f}s "
-                    f"(limit={self._max_timeout_seconds}s) at iteration {iteration}"
-                )
-                _loop_exit_reason = "timeout"
-                break
-
+        while True:
             iteration += 1
+            _elapsed = time.time() - _loop_start_time
             logger.info(
-                f"[AgentLoop:{self.agent_id}] Iteration {iteration}/{self._max_iterations} "
-                f"(elapsed={_elapsed:.0f}s/{self._max_timeout_seconds}s)"
+                f"[AgentLoop:{self.agent_id}] Iteration {iteration} (elapsed={_elapsed:.0f}s)"
             )
 
             # ── a. PRE_LLM_CALL hook ──
@@ -715,14 +701,6 @@ class AgentLoop:
                         logger.info(f"[AgentLoop:{self.agent_id}] Context compacted")
                 except Exception as e:
                     logger.debug(f"[AgentLoop:{self.agent_id}] Context compaction failed: {e}")
-
-        else:
-            _total_elapsed = time.time() - _loop_start_time
-            logger.warning(
-                f"[AgentLoop:{self.agent_id}] Loop ended: iterations={iteration}/{self._max_iterations}, "
-                f"elapsed={_total_elapsed:.0f}s/{self._max_timeout_seconds}s"
-            )
-            _loop_exit_reason = "max_iterations"
 
         # ── 6. ON_LOOP_END hook ──
         logger.info(f"[AgentLoop:{self.agent_id}] exit_reason={_loop_exit_reason} iterations={iteration} elapsed={time.time() - _loop_start_time:.0f}s")
